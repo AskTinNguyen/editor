@@ -34,6 +34,8 @@ This plan does **not** include:
 - Keep the existing `@pascal-app/editor` package untouched unless a small compatibility change is unavoidable. The current workspace has unrelated editor typecheck debt; the safest path is to build the new behavior around `apps/desktop` and `@pascal/scene-engine`.
 - Prefer package-local verification for `apps/desktop` and `@pascal/scene-engine`. Do not claim workspace-wide typecheck is clean unless the existing `@pascal-app/editor` baseline is actually resolved.
 - Keep the model-facing execution surface narrow. The agent should only read project/scene state and apply scene command batches in this milestone.
+- Treat agent-applied scene refresh as a trusted host event with an explicit history policy. For this milestone, a successful agent apply should become the new clean renderer baseline rather than merging invisibly into an older undo stack.
+- Do not rely on `parseSceneGraph(...)` alone for mutation safety. Node-level command execution must also validate parent-child referential integrity and forbid generic mutation of structural fields.
 
 ## Planned File Structure
 
@@ -65,7 +67,9 @@ This plan does **not** include:
 - `packages/scene-engine/src/commands/apply-scene-command.ts`
   Pure command application with batch support
 - `packages/scene-engine/src/commands/apply-scene-command.test.ts`
-  Deterministic regression tests for create/update/delete/batch behavior
+  Deterministic regression tests for create/update/move/delete/batch behavior
+- `packages/scene-engine/src/document/assert-scene-graph-integrity.ts`
+  Explicit graph-integrity validation for parent-child consistency and root safety
 - `packages/scene-engine/src/index.ts`
   Export the new command types and result surface
 
@@ -87,7 +91,7 @@ This plan does **not** include:
 - `apps/desktop/package.json`
   Add `acorn` for syntax validation
 - `apps/desktop/src/shared/agents.ts`
-  Agent session, message, status, tool log, and IPC contract types
+  Agent session, message, status, event-channel constants, and IPC contract types
 - `apps/desktop/src/main/agents/agent-session-store.ts`
   Persist/load one visible agent session per project
 - `apps/desktop/src/main/agents/pascal-code-executor.ts`
@@ -103,7 +107,7 @@ This plan does **not** include:
 - `apps/desktop/src/main/index.ts`
   Register agent IPC and create the manager once at app boot
 - `apps/desktop/src/preload/index.ts`
-  Expose `agents.*` APIs and subscriptions
+  Expose `agents.*` APIs and cleanup-safe subscriptions
 - `apps/desktop/electron.vite.config.ts`
   Adjust build config if the worker entry needs explicit bundling support
 
@@ -162,7 +166,7 @@ test('lists recent projects with most recently touched project first', async () 
 - [ ] **Step 2: Run the project-store tests to verify the new expectations fail**
 
 Run: `bun test apps/desktop/src/main/projects/project-store.test.ts`
-Expected: FAIL because the recent-project contract and ordering behavior are not fully exercised yet
+Expected: the new store assertion may already PASS because recent-project ordering exists today; if so, keep it as a contract test and continue because the real missing behavior is still the IPC/preload/renderer workbench flow
 
 - [ ] **Step 3: Expand the trusted project contract**
 
@@ -221,6 +225,7 @@ git commit -m "feat(desktop): add workbench shell and recent projects"
 - Create: `packages/scene-engine/src/commands/scene-command-result.ts`
 - Modify: `packages/scene-engine/src/commands/apply-scene-command.ts`
 - Modify: `packages/scene-engine/src/commands/apply-scene-command.test.ts`
+- Create: `packages/scene-engine/src/document/assert-scene-graph-integrity.ts`
 - Modify: `packages/scene-engine/src/index.ts`
 
 - [ ] **Step 1: Add failing tests for node-level commands**
@@ -229,6 +234,7 @@ Extend `apply-scene-command.test.ts` with tests for:
 
 - `create-node`
 - `update-node`
+- `move-node`
 - `delete-node`
 - `batch-commands`
 
@@ -261,9 +267,16 @@ export type SceneCommand =
   | { type: 'replace-scene-document'; document: ParsedSceneGraph }
   | { type: 'clear-scene-document' }
   | { type: 'create-node'; parentId: string | null; node: AnyNode }
-  | { type: 'update-node'; nodeId: string; patch: Partial<AnyNode> }
+  | { type: 'update-node'; nodeId: string; patch: SceneNodePatch }
+  | { type: 'move-node'; nodeId: string; nextParentId: string | null }
   | { type: 'delete-node'; nodeId: string }
   | { type: 'batch-commands'; commands: SceneCommand[] }
+```
+
+Where `SceneNodePatch` explicitly excludes structural fields:
+
+```ts
+type SceneNodePatch = Partial<Omit<AnyNode, 'id' | 'type' | 'parentId' | 'children'>>
 ```
 
 and a result model with:
@@ -281,7 +294,9 @@ Update `apply-scene-command.ts` so it:
 
 - never mutates the input document
 - validates the resulting document with `parseSceneGraph`
-- updates parent `children` arrays when creating or deleting
+- validates the full graph with `assertSceneGraphIntegrity(...)`
+- rejects generic patch attempts against `id`, `type`, `parentId`, and `children`
+- updates parent `children` arrays when creating, moving, or deleting
 - composes nested command batches deterministically
 
 - [ ] **Step 5: Re-run scene-engine verification**
@@ -295,7 +310,7 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/scene-engine/src/commands packages/scene-engine/src/index.ts
+git add packages/scene-engine/src/commands packages/scene-engine/src/document packages/scene-engine/src/index.ts
 git commit -m "feat(scene-engine): add deterministic node commands"
 ```
 
@@ -395,6 +410,7 @@ Write tests proving:
 - the worker times out when `_timeoutMs` is exceeded
 - a whitelisted `pascal.scene_applyCommands(...)` call routes through the host callback
 - console output is captured into structured logs
+- subscription listeners can be removed cleanly without duplicate event delivery
 
 Suggested shape:
 
@@ -427,6 +443,7 @@ Implement a Vesper-style `pascal_execute` host/worker pair with:
   - `scene_applyCommands`
 - timeout enforcement
 - structured log capture
+- shared typed event channels for `agents:*`
 
 - [ ] **Step 4: Add persistent project-scoped session storage**
 
@@ -450,6 +467,8 @@ subscribe(projectId: ProjectId, listener: (event: AgentSessionEvent) => void): (
 ```
 
 The first implementation may use a provider adapter seam internally, but the external contract must stay stable and desktop-owned.
+
+Define the event channel names and payload union in `apps/desktop/src/shared/agents.ts`, and verify preload subscription cleanup so renderer listeners do not leak across project switches.
 
 - [ ] **Step 6: Verify the agent runtime foundation**
 
@@ -516,7 +535,8 @@ When `sendMessage(...)` completes:
 
 - refresh the current project scene from the trusted desktop runtime
 - keep the editor mounted on the same project ID
-- let normal undo/history remain available from the editor runtime
+- make the refreshed scene the new renderer baseline by clearing temporal history before or during the trusted reload path
+- do not rely on incidental `onLoad` identity changes for correctness; introduce an explicit host-owned refresh or revision path if needed
 
 - [ ] **Step 5: Verify the visible agent edit loop**
 
