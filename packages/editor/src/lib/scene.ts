@@ -1,6 +1,6 @@
 'use client'
 
-import { resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
+import { parseSceneGraph, resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
   hasCustomPersistedEditorUiState,
@@ -359,9 +359,10 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 }
 
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
-  if (hasUsableSceneGraph(sceneGraph)) {
-    const { nodes, rootNodeIds } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any)
+  const parsedScene = hasUsableSceneGraph(sceneGraph) ? parseSceneGraph(sceneGraph) : null
+
+  if (parsedScene) {
+    useScene.getState().setScene(parsedScene.nodes, parsedScene.rootNodeIds as any)
   } else {
     useScene.getState().clearScene()
   }
@@ -382,7 +383,8 @@ export function saveSceneToLocalStorage(scene: SceneGraph): void {
 export function loadSceneFromLocalStorage(): SceneGraph | null {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as SceneGraph) : null
+    if (!raw) return null
+    return parseSceneGraph(JSON.parse(raw))
   } catch {
     return null
   }
