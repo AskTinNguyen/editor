@@ -1,6 +1,7 @@
 'use client'
 
-import { parseSceneGraph, resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
+import { resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
+import { parseSceneGraph } from '@pascal/scene-engine'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
   hasCustomPersistedEditorUiState,

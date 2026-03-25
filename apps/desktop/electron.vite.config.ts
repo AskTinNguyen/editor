@@ -1,0 +1,37 @@
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
+import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import react from '@vitejs/plugin-react'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+
+export default defineConfig({
+  main: {
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      outDir: 'dist/main',
+    },
+  },
+  preload: {
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      outDir: 'dist/preload',
+    },
+  },
+  renderer: {
+    root: join(currentDir, 'src/renderer'),
+    plugins: [tailwindcss(), react()],
+    build: {
+      outDir: '../../dist/renderer',
+      emptyOutDir: true,
+    },
+    resolve: {
+      alias: {
+        '@': join(currentDir, 'src/renderer/src'),
+        'next/image': join(currentDir, 'src/renderer/src/shims/next-image.tsx'),
+        'next/link': join(currentDir, 'src/renderer/src/shims/next-link.tsx'),
+      },
+    },
+  },
+})

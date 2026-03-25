@@ -4,6 +4,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "set -a && . ./.env 2>/dev/null; set +a; turbo run dev --env-mode=loose",
+    "desktop:build": "turbo run build --filter=desktop",
+    "desktop:dev": "turbo run dev --filter=desktop",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "format": "biome format --write",

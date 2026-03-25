@@ -1,0 +1,6 @@
+export { applySceneCommand } from './commands/apply-scene-command'
+export type { SceneCommand } from './commands/scene-command'
+export type { SceneDocument } from './document/scene-document'
+export { parseSceneGraph } from './document/scene-graph'
+export type { ParsedSceneGraph } from './document/scene-graph'
+export * from './schema'

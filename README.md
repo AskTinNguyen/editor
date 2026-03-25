@@ -21,6 +21,33 @@ editor-v2/
 │   └── viewer/          # 3D rendering components
 ```
 
+## Desktop Development
+
+The first Electron-native milestone now lives in `apps/desktop` and introduces a headless
+`@pascal/scene-engine` package for scene parsing, validation, and deterministic document commands.
+
+### Run it
+
+```bash
+bun install
+bun run desktop:dev
+```
+
+### Build it
+
+```bash
+bun run desktop:build
+```
+
+### Where project files live in development
+
+Desktop projects are stored under Electron's `userData` directory in a `projects/` workspace.
+On macOS, the current development build resolves that to a path like:
+
+```text
+~/Library/Application Support/desktop/projects/<project-id>/project.pascal.json
+```
+
 ### Separation of Concerns
 
 | Package | Responsibility |

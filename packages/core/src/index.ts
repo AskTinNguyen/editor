@@ -33,6 +33,12 @@ export {
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 // Asset storage
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
+export { applySceneCommand, parseSceneGraph } from '@pascal/scene-engine'
+export type {
+  ParsedSceneGraph,
+  SceneCommand,
+  SceneDocument,
+} from '@pascal/scene-engine'
 // Space detection
 export {
   detectSpacesForLevel,
