@@ -214,6 +214,16 @@ Agent code execution should run in an isolated execution environment using a Ves
 
 Heavy work should move into workers or utility processes rather than staying in the UI thread.
 
+## Ownership map
+
+| Concern | Main process | Workspace runtime | Agent runtime | Scene engine | Background workers |
+|---|---|---|---|---|---|
+| Project files and persistence | Owns trusted filesystem access and save/load APIs | Owns project lifecycle, autosave policy, snapshots, and version records | Reads project context through workspace APIs | Reads/writes scene payloads through command application | Never writes project files directly; reports artifacts/results back to workspace runtime |
+| Workflow execution | Spawns trusted worker/sandbox processes and enforces capability boundaries | Owns workflow records, lifecycle state, cancellation, and persistence | Plans and triggers workflows, monitors progress, and reacts to results | Supplies deterministic scene commands used by workflows | Executes long-running workflow steps and reports progress/results |
+| Approvals and permission policy | Enforces privileged decisions and native permission boundaries | Owns persisted approval state and policy configuration | Requests approvals, presents intent, and adapts behavior to current mode | Never decides permissions | Never decides permissions; executes only already-approved jobs |
+| Scene mutations | Never mutates scene state directly | Records mutation history, persistence, and review artifacts | Issues scene commands or proposals through approved APIs | Sole authority for validating and applying deterministic scene commands | May prepare candidate outputs, but final scene mutation still goes through scene engine |
+| Job coordination | Owns process lifecycle for workers and sandboxes | Owns job records, queue state, retries, and progress streams | Starts, observes, and reasons about jobs | Supplies pure validation/domain logic when needed | Performs execution of exports, indexing, generation, and other heavy tasks |
+
 ## Target package split
 
 - `@pascal/scene-engine`
@@ -232,6 +242,8 @@ Heavy work should move into workers or utility processes rather than staying in 
   Optional web host for marketing, sharing, previews, or lighter future experiences
 
 ## Operating Model
+
+Workflow ownership should be explicit: the agent runtime decides and initiates workflow intent, the workspace runtime owns workflow records and persisted lifecycle state, the main process owns trusted execution/process boundaries, and background workers execute long-running steps.
 
 ## Manual editing path
 
@@ -422,6 +434,35 @@ Proposal UX is a critical adoption bridge for professional users learning to tru
 ## Migration Strategy
 
 The migration should be seam-by-seam, not a rewrite.
+
+## First planning milestone
+
+The first implementation plan should target a single bounded slice:
+
+- create `apps/desktop`
+- create a preload/main-process API for local project files
+- extract a first `@pascal/scene-engine` boundary from the current `core`
+- make desktop project files, not browser storage, the source of truth
+- preserve the current manual editor experience inside the desktop shell
+
+This milestone should explicitly exclude:
+
+- `apps/web` evolution beyond keeping the existing web host functioning
+- full agent runtime integration
+- Pascal CodeMode
+- workflow/skill-pack execution
+- workerized export/indexing/generation beyond what is necessary for the desktop shell bootstrap
+- broad floorplan refactors unrelated to the scene-engine and desktop-storage seam
+
+The goal of the first milestone is to establish the desktop-native foundation and the scene-engine seam, not to deliver the entire agent-native architecture in one step.
+
+Acceptance criteria for the first milestone:
+
+- `apps/desktop` launches the existing editor runtime inside Electron
+- local project files can be created, opened, saved, and re-opened without relying on browser `localStorage` as the source of truth
+- a first `@pascal/scene-engine` package or equivalent boundary exists and owns scene parsing, validation, and deterministic command application
+- the desktop shell, not the renderer, owns trusted filesystem access
+- the current manual editing flow still works through the desktop shell with no agent-runtime dependency
 
 ### Phase 1. Split the scene engine
 
