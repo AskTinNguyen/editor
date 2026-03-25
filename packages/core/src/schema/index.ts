@@ -1,4 +1,6 @@
 // Base
+
+export { parseSceneGraph } from '../lib/scene-graph'
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'

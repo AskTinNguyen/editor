@@ -1,4 +1,4 @@
-import { emitter, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, parseSceneGraph, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, Save, Trash2, Upload } from 'lucide-react'
@@ -227,12 +227,11 @@ export function SettingsPanel({
     const reader = new FileReader()
     reader.onload = (event) => {
       try {
-        const data = JSON.parse(event.target?.result as string)
-        if (data.nodes && data.rootNodeIds) {
-          setScene(data.nodes, data.rootNodeIds)
-          resetSelection()
-          setPhase('site')
-        }
+        const data = parseSceneGraph(JSON.parse(event.target?.result as string))
+        if (!data) throw new Error('Invalid scene graph file')
+        setScene(data.nodes, data.rootNodeIds as AnyNodeId[])
+        resetSelection()
+        setPhase('site')
       } catch (err) {
         console.error('Failed to load build:', err)
       }

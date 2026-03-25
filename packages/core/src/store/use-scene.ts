@@ -3,6 +3,7 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { parseSceneGraph } from '../lib/scene-graph'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
@@ -129,12 +130,18 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
 
       setScene: (nodes, rootNodeIds) => {
+        const sceneGraph = parseSceneGraph({ nodes, rootNodeIds })
+        if (!sceneGraph) {
+          console.warn('Ignoring invalid scene graph payload passed to setScene()')
+          return
+        }
+
         // Apply backward compatibility migrations
-        const patchedNodes = migrateNodes(nodes)
+        const patchedNodes = migrateNodes(sceneGraph.nodes)
 
         set({
           nodes: patchedNodes,
-          rootNodeIds,
+          rootNodeIds: sceneGraph.rootNodeIds as AnyNodeId[],
           dirtyNodes: new Set<AnyNodeId>(),
         })
         // Mark all nodes as dirty to trigger re-validation

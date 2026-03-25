@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { getTrustedAssetRemotePatterns } from './lib/assets-cdn'
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -20,16 +21,7 @@ const nextConfig: NextConfig = {
   },
   images: {
     unoptimized: process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.startsWith('http://localhost') ?? false,
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-      {
-        protocol: 'http',
-        hostname: '**',
-      },
-    ],
+    remotePatterns: getTrustedAssetRemotePatterns(),
   },
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { parseSceneGraph, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../store/use-editor'
 
@@ -43,9 +43,10 @@ export function syncEditorSelectionFromCurrentScene() {
 }
 
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
-  if (sceneGraph?.nodes && sceneGraph.rootNodeIds) {
-    const { nodes, rootNodeIds } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any)
+  const parsedScene = sceneGraph ? parseSceneGraph(sceneGraph) : null
+
+  if (parsedScene) {
+    useScene.getState().setScene(parsedScene.nodes, parsedScene.rootNodeIds as any)
   } else {
     useScene.getState().clearScene()
   }
@@ -66,7 +67,8 @@ export function saveSceneToLocalStorage(scene: SceneGraph): void {
 export function loadSceneFromLocalStorage(): SceneGraph | null {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as SceneGraph) : null
+    if (!raw) return null
+    return parseSceneGraph(JSON.parse(raw))
   } catch {
     return null
   }
