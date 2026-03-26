@@ -11,6 +11,12 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       outDir: 'dist/main',
+      rollupOptions: {
+        input: {
+          index: join(currentDir, 'src/main/index.ts'),
+          'pascal-code-executor-worker': join(currentDir, 'src/main/agents/pascal-code-executor-worker.ts'),
+        },
+      },
     },
   },
   preload: {
