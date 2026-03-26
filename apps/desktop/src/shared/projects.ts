@@ -52,7 +52,10 @@ export type PascalDesktopProjectsApi = {
   applySceneCommands(projectId: ProjectId, commands: SceneCommand[]): Promise<ProjectCommandResult>
 }
 
+export type { PascalDesktopAgentsApi } from './agents'
+
 export type PascalDesktopApi = {
   // The trusted main process owns the projectId -> projectFilePath mapping.
   projects: PascalDesktopProjectsApi
+  agents: import('./agents').PascalDesktopAgentsApi
 }

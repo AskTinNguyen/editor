@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { AGENT_IPC_CHANNELS } from '../shared/agents'
 import type { PascalDesktopApi } from '../shared/projects'
 
 const pascalDesktopApi: PascalDesktopApi = {
@@ -11,6 +12,31 @@ const pascalDesktopApi: PascalDesktopApi = {
     listRecent: () => ipcRenderer.invoke('projects:list-recent'),
     applySceneCommands: (projectId, commands) =>
       ipcRenderer.invoke('projects:apply-scene-commands', { projectId, commands }),
+  },
+  agents: {
+    getSession: (projectId) =>
+      ipcRenderer.invoke(AGENT_IPC_CHANNELS.getSession, { projectId }),
+    sendMessage: (projectId, prompt) =>
+      ipcRenderer.invoke(AGENT_IPC_CHANNELS.sendMessage, { projectId, prompt }),
+    subscribe: (projectId, listener) => {
+      ipcRenderer.send(AGENT_IPC_CHANNELS.subscribe, { projectId })
+
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { projectId: string; event: Parameters<typeof listener>[0] },
+      ) => {
+        if (payload.projectId === projectId) {
+          listener(payload.event)
+        }
+      }
+
+      ipcRenderer.on(AGENT_IPC_CHANNELS.event, handler)
+
+      return () => {
+        ipcRenderer.removeListener(AGENT_IPC_CHANNELS.event, handler)
+        ipcRenderer.send(AGENT_IPC_CHANNELS.unsubscribe, { projectId })
+      }
+    },
   },
 }
 
