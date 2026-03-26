@@ -71,4 +71,70 @@ describe('createProjectStore', () => {
       await rm(rootDir, { force: true, recursive: true })
     }
   })
+
+  test('listRecentProjects returns most recently opened project first', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-project-store-'))
+
+    try {
+      const store = createProjectStore({ rootDir })
+
+      const projectA = await store.createProject({ name: 'Project A' })
+      const projectB = await store.createProject({ name: 'Project B' })
+      const projectC = await store.createProject({ name: 'Project C' })
+
+      // After creation, order is C (most recent), B, A
+      const listAfterCreate = await store.listRecentProjects()
+      expect(listAfterCreate.map((p) => p.projectId)).toEqual([
+        projectC.projectId,
+        projectB.projectId,
+        projectA.projectId,
+      ])
+
+      // Re-open project A — it should move to the front
+      await store.openProjectById(projectA.projectId)
+
+      const listAfterReopen = await store.listRecentProjects()
+      expect(listAfterReopen.map((p) => p.projectId)).toEqual([
+        projectA.projectId,
+        projectC.projectId,
+        projectB.projectId,
+      ])
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+
+  test('openProjectById returns the project without exposing file paths', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-project-store-'))
+
+    try {
+      const store = createProjectStore({ rootDir })
+      const created = await store.createProject({ name: 'ID Lookup Project' })
+
+      const opened = await store.openProjectById(created.projectId)
+
+      expect(opened.projectId).toBe(created.projectId)
+      expect(opened.name).toBe('ID Lookup Project')
+      expect(opened.scene).toBeDefined()
+      expect(opened.createdAt).toBe(created.createdAt)
+      // The returned PascalProjectFile must NOT contain projectFilePath
+      expect(opened).not.toHaveProperty('projectFilePath')
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+
+  test('openProjectById throws for unknown project ID', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-project-store-'))
+
+    try {
+      const store = createProjectStore({ rootDir })
+
+      await expect(
+        store.openProjectById('project_nonexistent'),
+      ).rejects.toThrow('Unknown project "project_nonexistent"')
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
 })

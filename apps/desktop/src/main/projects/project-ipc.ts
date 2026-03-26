@@ -1,9 +1,11 @@
 import { ipcMain } from 'electron'
 import type {
   CreateProjectInput,
+  ProjectCommandPayload,
   ProjectId,
   ProjectScenePayload,
 } from '../../shared/projects'
+import { applyProjectSceneCommands } from './project-command-service'
 import { ensureInitialProject } from './project-bootstrap'
 import type { createProjectStore } from './project-store'
 
@@ -26,5 +28,9 @@ export function registerProjectIpc(store: ProjectStore) {
   )
   ipcMain.handle('projects:save-scene', (_event, payload: ProjectScenePayload) =>
     store.saveProjectScene(payload.projectId, payload.scene),
+  )
+  ipcMain.handle('projects:list-recent', () => store.listRecentProjects())
+  ipcMain.handle('projects:apply-scene-commands', (_event, payload: ProjectCommandPayload) =>
+    applyProjectSceneCommands(store, payload.projectId, payload.commands),
   )
 }

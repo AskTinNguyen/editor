@@ -1,4 +1,10 @@
-import type { ParsedSceneGraph, SceneDocument } from '@pascal/scene-engine'
+import type {
+  ParsedSceneGraph,
+  SceneCommand,
+  SceneCommandBatchResult,
+  SceneCommandResult,
+  SceneDocument,
+} from '@pascal/scene-engine'
 
 export type ProjectId = `project_${string}`
 
@@ -28,11 +34,22 @@ export type ProjectScenePayload = {
 
 export type GetInitialProjectResult = PascalProjectFile
 
+export type ProjectCommandPayload = {
+  projectId: ProjectId
+  commands: SceneCommand[]
+}
+
+export type ProjectCommandResult =
+  | { status: 'ok'; result: SceneCommandResult | SceneCommandBatchResult }
+  | { status: 'error'; result: SceneCommandResult | SceneCommandBatchResult }
+
 export type PascalDesktopProjectsApi = {
   getInitialProject(): Promise<GetInitialProjectResult>
   create(input: CreateProjectInput): Promise<ProjectSummary>
   open(projectId: ProjectId): Promise<PascalProjectFile>
   saveScene(projectId: ProjectId, scene: SceneDocument): Promise<void>
+  listRecent(): Promise<ProjectSummary[]>
+  applySceneCommands(projectId: ProjectId, commands: SceneCommand[]): Promise<ProjectCommandResult>
 }
 
 export type PascalDesktopApi = {

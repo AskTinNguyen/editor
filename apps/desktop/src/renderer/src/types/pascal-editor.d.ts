@@ -6,10 +6,13 @@ declare module '@pascal-app/editor' {
     rootNodeIds: string[]
   }
 
+  export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
+
   export type EditorProps = {
     projectId?: string | null
     onLoad?: () => Promise<SceneGraph | null>
     onSave?: (scene: SceneGraph) => Promise<void>
+    onSaveStatusChange?: (status: SaveStatus) => void
   }
 
   export const Editor: ComponentType<EditorProps>

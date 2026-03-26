@@ -8,6 +8,9 @@ const pascalDesktopApi: PascalDesktopApi = {
     open: (projectId) => ipcRenderer.invoke('projects:open', { projectId }),
     saveScene: (projectId, scene) =>
       ipcRenderer.invoke('projects:save-scene', { projectId, scene }),
+    listRecent: () => ipcRenderer.invoke('projects:list-recent'),
+    applySceneCommands: (projectId, commands) =>
+      ipcRenderer.invoke('projects:apply-scene-commands', { projectId, commands }),
   },
 }
 
