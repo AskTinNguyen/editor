@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { CreateProjectInput, PascalProjectFile, ProjectId } from '../../shared/projects'
 import { RecentProjectSheet } from './components/recent-project-sheet'
 import { WorkbenchShell } from './components/workbench-shell'
+import { shouldRefreshScene } from './lib/scene-refresh'
 
 function LoadingState({ message }: { message: string }) {
   return (
@@ -21,6 +22,7 @@ export function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [recentsOpen, setRecentsOpen] = useState(false)
+  const [sceneRevision, setSceneRevision] = useState(0)
 
   // Load the initial project on mount
   useEffect(() => {
@@ -43,6 +45,29 @@ export function App() {
       cancelled = true
     }
   }, [])
+
+  // Subscribe to agent turn completions for scene refresh
+  useEffect(() => {
+    if (!currentProject) return
+
+    const unsubscribe = window.pascalDesktop.agents.subscribe(
+      currentProject.projectId,
+      (event) => {
+        if (shouldRefreshScene(event)) {
+          window.pascalDesktop.projects
+            .open(currentProject.projectId)
+            .then((freshProject) => {
+              setCurrentProject(freshProject)
+              setSceneRevision((prev) => prev + 1)
+              setSaveStatus('idle')
+            })
+            .catch(() => {})
+        }
+      },
+    )
+
+    return unsubscribe
+  }, [currentProject?.projectId])
 
   // Switch to a different project by ID
   const handleOpenProject = useCallback(async (projectId: ProjectId) => {
@@ -93,6 +118,7 @@ export function App() {
         onCreateProject={handleCreateProject}
       >
         <Editor
+          key={`${currentProject.projectId}_${sceneRevision}`}
           onLoad={async () => currentProject.scene}
           onSave={async (scene) => {
             await window.pascalDesktop.projects.saveScene(currentProject.projectId, scene)
