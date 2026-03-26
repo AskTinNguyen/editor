@@ -4,6 +4,7 @@ import { registerAgentIpc } from './agents/agent-ipc'
 import { createAgentSessionManager } from './agents/agent-session-manager'
 import { createAgentSessionStore } from './agents/agent-session-store'
 import { createPascalCodeExecutor } from './agents/pascal-code-executor'
+import { createStubAgentProvider } from './agents/stub-agent-provider'
 import { createMainWindow } from './create-main-window'
 import { applyProjectSceneCommands } from './projects/project-command-service'
 import { registerProjectIpc } from './projects/project-ipc'
@@ -39,10 +40,13 @@ import type { ProjectId } from '../shared/projects'
 // Late-bound event broadcaster — wired after IPC registration
 let broadcast: ((projectId: ProjectId, event: AgentSessionEvent) => void) | undefined
 
+const provider = createStubAgentProvider()
+
 const sessionManager = createAgentSessionManager({
   sessionStore,
   projectStore,
   executor,
+  provider,
   onEvent: (projectId, event) => broadcast?.(projectId, event),
 })
 

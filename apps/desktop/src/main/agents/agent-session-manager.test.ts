@@ -6,9 +6,11 @@ import { createProjectStore } from '../projects/project-store'
 import { createAgentSessionStore } from './agent-session-store'
 import { createAgentSessionManager } from './agent-session-manager'
 import { createPascalCodeExecutor } from './pascal-code-executor'
+import { createStubAgentProvider } from './stub-agent-provider'
 import { applyProjectSceneCommands } from '../projects/project-command-service'
 import type { AgentSessionEvent } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
+import type { PascalAgentProvider } from './agent-provider'
 
 // ---------------------------------------------------------------------------
 // Test helper — wire executor tools to the real project store
@@ -29,6 +31,16 @@ function createTestTools(projectStore: ReturnType<typeof createProjectStore>) {
       return result
     },
   }
+}
+
+// ---------------------------------------------------------------------------
+// Minimal provider for existing tests (read-only — no scene mutations)
+// ---------------------------------------------------------------------------
+
+const minimalProvider: PascalAgentProvider = {
+  async generateCode({ projectId }) {
+    return `const p = await pascal.project_read('${projectId}')`
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +67,7 @@ describe('AgentSessionManager integration', () => {
         sessionStore,
         projectStore,
         executor,
+        provider: minimalProvider,
         onEvent,
       })
 
@@ -102,6 +115,7 @@ describe('AgentSessionManager integration', () => {
         sessionStore,
         projectStore,
         executor,
+        provider: minimalProvider,
       })
 
       const project = await projectStore.createProject({ name: 'Persist Test' })
@@ -153,6 +167,7 @@ describe('AgentSessionManager integration', () => {
         sessionStore,
         projectStore,
         executor,
+        provider: minimalProvider,
       })
 
       const project = await projectStore.createProject({ name: 'Result Test' })
@@ -186,6 +201,7 @@ describe('AgentSessionManager integration', () => {
         sessionStore,
         projectStore,
         executor,
+        provider: minimalProvider,
       })
 
       const project = await projectStore.createProject({ name: 'Idle Test' })
@@ -221,6 +237,7 @@ describe('AgentSessionManager integration', () => {
         sessionStore,
         projectStore,
         executor,
+        provider: minimalProvider,
         onEvent: (_projectId, event) => {
           events.push(event)
         },
@@ -256,6 +273,69 @@ describe('AgentSessionManager integration', () => {
       // Should have a turn-completed event
       const turnCompleted = events.find((e) => e.type === 'turn-completed')
       expect(turnCompleted).toBeDefined()
+    } finally {
+      await rm(projectDir, { force: true, recursive: true })
+      await rm(sessionDir, { force: true, recursive: true })
+    }
+  })
+
+  test('sendMessage with stub provider creates a wall and persists it', async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), 'pascal-sm-e2e-'))
+    const sessionDir = await mkdtemp(join(tmpdir(), 'pascal-sm-session-'))
+
+    try {
+      const projectStore = createProjectStore({ rootDir: projectDir })
+      const sessionStore = createAgentSessionStore({ rootDir: sessionDir })
+      const tools = createTestTools(projectStore)
+      const executor = createPascalCodeExecutor(tools)
+      const provider = createStubAgentProvider()
+
+      const manager = createAgentSessionManager({
+        sessionStore,
+        projectStore,
+        executor,
+        provider,
+      })
+
+      // Create a project so we have a valid ID
+      const project = await projectStore.createProject({ name: 'E2E Wall Test' })
+
+      // Record initial node count
+      const before = await projectStore.openProjectById(project.projectId)
+      const initialNodeCount = Object.keys(before.scene.nodes).length
+
+      // Send a message through the full lifecycle — stub provider sees "wall" and generates code
+      const result = await manager.sendMessage(project.projectId, 'add a wall')
+
+      // Assert the turn completed successfully
+      expect(result.status).toBe('completed')
+
+      // Assert scene commands were applied
+      expect(result.sceneCommandsApplied).toBeGreaterThan(0)
+
+      // Assert the summary reports applied commands
+      expect(result.summary).toContain('scene command(s)')
+
+      // Reopen the project from disk and verify the wall was persisted
+      const reopened = await projectStore.openProjectById(project.projectId)
+      const wallNodes = Object.values(reopened.scene.nodes).filter(
+        (n) => (n as { type: string }).type === 'wall',
+      )
+      expect(wallNodes.length).toBeGreaterThan(0)
+
+      // Verify the node count increased
+      const finalNodeCount = Object.keys(reopened.scene.nodes).length
+      expect(finalNodeCount).toBeGreaterThan(initialNodeCount)
+
+      // Verify session state is consistent
+      const session = await manager.getSession(project.projectId)
+      expect(session.status).toBe('completed')
+      expect(session.messages.length).toBe(2)
+      expect(session.messages[0]!.role).toBe('user')
+      expect(session.messages[0]!.content).toBe('add a wall')
+      expect(session.messages[1]!.role).toBe('agent')
+      expect(session.lastTurnResult).not.toBeNull()
+      expect(session.lastTurnResult!.sceneCommandsApplied).toBeGreaterThan(0)
     } finally {
       await rm(projectDir, { force: true, recursive: true })
       await rm(sessionDir, { force: true, recursive: true })

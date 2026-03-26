@@ -12,6 +12,7 @@ import type {
 import type { ProjectId } from '../../shared/projects'
 import type { createAgentSessionStore } from './agent-session-store'
 import type { createProjectStore } from '../projects/project-store'
+import type { PascalAgentProvider } from './agent-provider'
 
 // ---------------------------------------------------------------------------
 // Dependency-injected executor interface (Worker E builds the real one)
@@ -32,6 +33,7 @@ export function createAgentSessionManager(deps: {
   sessionStore: SessionStore
   projectStore: ProjectStore
   executor: CodeExecutor
+  provider: PascalAgentProvider
   onEvent?: (projectId: ProjectId, event: AgentSessionEvent) => void
 }) {
   const { sessionStore, projectStore, executor, onEvent } = deps
@@ -79,19 +81,18 @@ export function createAgentSessionManager(deps: {
       // 3. Set status to 'reading'
       await setStatus(session, 'reading')
 
-      // 4. Load current project to get scene state
-      await projectStore.openProjectById(projectId)
+      // 4. Load current project
+      const project = await projectStore.openProjectById(projectId)
 
       // 5. Set status to 'planning'
       await setStatus(session, 'planning')
 
-      // 6. Build execution code (PLACEHOLDER — real LLM integration replaces this)
-      const code = `
-        // Agent prompt: ${JSON.stringify(prompt)}
-        const project = await pascal.project_read('${projectId}')
-        // TODO: Real LLM-generated code will go here.
-        // For now, just read the project as a placeholder.
-      `
+      // 6. Generate code via provider
+      const code = await deps.provider.generateCode({
+        projectId,
+        prompt,
+        sceneContext: project.scene,
+      })
 
       // 7. Set status to 'applying'
       await setStatus(session, 'applying')
@@ -101,7 +102,7 @@ export function createAgentSessionManager(deps: {
 
       // 9. Build AgentTurnResult from execution result
       const sceneCommandsApplied = execResult.logs.filter(
-        (entry: ExecutionLogEntry) => entry.type === 'scene-commands-applied',
+        (entry: ExecutionLogEntry) => entry.type === 'tool-call' && entry.tool === 'scene_applyCommands',
       ).length
 
       const turnResult: AgentTurnResult = {
