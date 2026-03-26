@@ -1,13 +1,8 @@
 import type { ReactNode } from 'react'
 import type { SaveStatus } from '@pascal-app/editor'
 import type { CreateProjectInput, PascalProjectFile } from '../../../shared/projects'
+import { MissionConsole } from './mission-console'
 import { ProjectToolbar } from './project-toolbar'
-
-/**
- * Minimum height for the bottom slot reserved for the future mission console.
- * Kept small so it doesn't eat editor space until the console ships.
- */
-const MISSION_CONSOLE_MIN_HEIGHT = 'min-h-[28px]'
 
 export interface WorkbenchShellProps {
   /** The currently loaded project (drives toolbar display). */
@@ -28,7 +23,7 @@ export interface WorkbenchShellProps {
  * Layout (top to bottom):
  *   1. ProjectToolbar  — project title, save state, open/create actions
  *   2. Editor region   — flex-1, takes all remaining space
- *   3. Bottom slot     — reserved for the future mission console
+ *   3. MissionConsole  — bottom console for agent interaction
  */
 export function WorkbenchShell({
   project,
@@ -50,11 +45,8 @@ export function WorkbenchShell({
       {/* Central editor region */}
       <main className="relative flex-1 overflow-hidden">{children}</main>
 
-      {/* Bottom slot: reserved for future mission console */}
-      <div
-        className={`shrink-0 ${MISSION_CONSOLE_MIN_HEIGHT} border-t border-border/60 bg-card`}
-        data-slot="mission-console"
-      />
+      {/* Bottom: mission console */}
+      <MissionConsole projectId={project.projectId} />
     </div>
   )
 }
