@@ -1,4 +1,5 @@
 import type { PascalAgentProvider } from '../agent-provider'
+import { createStubAgentProvider } from '../stub-agent-provider'
 import { createAnthropicProvider, type AnthropicProviderConfig } from './anthropic-provider'
 import { createOpenAIProvider, type OpenAIProviderConfig } from './openai-provider'
 import {
@@ -20,11 +21,8 @@ export type ProviderConfig =
 
 export function createProvider(selection: ProviderConfig): PascalAgentProvider {
   switch (selection.provider) {
-    case 'stub': {
-      // Lazy import to avoid circular dependency
-      const { createStubAgentProvider } = require('../stub-agent-provider')
+    case 'stub':
       return createStubAgentProvider()
-    }
     case 'anthropic':
       return createAnthropicProvider(selection.config)
     case 'openai':
