@@ -93,3 +93,19 @@ User input (pointer/keyboard)
 | Database | Supabase PostgreSQL + Drizzle ORM |
 | Auth | better-auth |
 | Tooling | Biome, TypeScript 5.9, Turborepo |
+
+---
+
+## Deeper Docs
+
+Each package and app has its own AGENTS.md for deeper context — start here, drill down by domain.
+
+| Doc | What it covers |
+|-----|----------------|
+| [packages/scene-engine/AGENTS.md](packages/scene-engine/AGENTS.md) | Command kernel — SceneCommand types, applySceneCommand, graph integrity, ID conventions |
+| [packages/core/AGENTS.md](packages/core/AGENTS.md) | State + systems — useScene store, dirty loop, registry pattern, spatial grid, event bus |
+| [packages/viewer/AGENTS.md](packages/viewer/AGENTS.md) | 3D rendering — renderer chain, useViewer store, level/wall modes, post-processing, isolation rule |
+| [packages/editor/AGENTS.md](packages/editor/AGENTS.md) | Editor UI — phase/mode/tool state machine, tool implementations, panels, command palette, catalog |
+| [apps/editor/AGENTS.md](apps/editor/AGENTS.md) | Web app shell — Next.js routes, demo adapter, environment utils |
+| [apps/desktop/AGENTS.md](apps/desktop/AGENTS.md) | Agent runtime — session lifecycle, code executor, worker sandbox, IPC channels, safety model |
+| [docs/AGENTS.md](docs/AGENTS.md) | Plans & specs — implementation roadmap, design decisions, current status |
