@@ -1,4 +1,5 @@
 import type { PascalAgentProvider, PascalToolCallHandler } from '../agent-provider'
+import { buildSystemPrompt } from './system-prompt'
 
 // ---------------------------------------------------------------------------
 // Anthropic-specific config
@@ -56,42 +57,6 @@ const pascalTools = [
     },
   },
 ]
-
-// ---------------------------------------------------------------------------
-// System prompt builder
-// ---------------------------------------------------------------------------
-
-function buildSystemPrompt(sceneContext: unknown): string {
-  const scene = sceneContext as {
-    nodes: Record<string, { type: string; [k: string]: unknown }>
-    rootNodeIds: string[]
-  }
-
-  const nodes = scene?.nodes ?? {}
-  const nodeCount = Object.keys(nodes).length
-  const nodeTypes = [...new Set(Object.values(nodes).map((n) => n.type))]
-
-  return `You are a Pascal scene editing assistant. You help users modify architectural floor plans.
-
-Current scene has ${nodeCount} nodes of types: ${nodeTypes.join(', ')}.
-
-Available tools:
-- project_read: Read project metadata and full scene graph
-- scene_read: Read only the scene graph
-- scene_applyCommands: Apply scene modifications (create-node, update-node, move-node, delete-node)
-
-Node types: site, building, level, wall, door, window, item, zone, slab, ceiling, roof, roof-segment, scan, guide.
-Node IDs follow the pattern: {type}_{uuid} (e.g., wall_abc123).
-The scene hierarchy is: site → building → level → [walls, zones, slabs, etc.]
-
-When creating nodes, always:
-1. Use the correct ID prefix for the node type
-2. Set required fields for the node type
-3. Specify the correct parentId (usually a level for walls/zones/slabs)
-
-For walls, required fields: id, type: "wall", start: [x, z], end: [x, z], children: []
-For items, required fields: id, type: "item", position: [x, y, z]`
-}
 
 // ---------------------------------------------------------------------------
 // Provider factory

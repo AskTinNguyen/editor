@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import type { PascalAgentProvider, PascalToolCallHandler } from '../agent-provider'
+import { buildSystemPrompt } from './system-prompt'
 
 // ---------------------------------------------------------------------------
 // OpenAI provider configuration
@@ -69,38 +70,6 @@ const pascalTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     },
   },
 ]
-
-// ---------------------------------------------------------------------------
-// System prompt builder
-// ---------------------------------------------------------------------------
-
-function buildSystemPrompt(sceneContext: unknown): string {
-  const contextBlock =
-    sceneContext != null ? JSON.stringify(sceneContext, null, 2) : '(empty)'
-
-  return `You are Pascal, an AI assistant that helps users design and modify architectural floor plans.
-
-You have access to a scene graph that represents the current state of the project. Use the provided tools to read and modify the scene.
-
-## Available tools
-
-- **project_read** — Retrieve project metadata and the full scene graph.
-- **scene_read** — Retrieve only the scene graph for a project.
-- **scene_applyCommands** — Apply an ordered list of scene commands atomically. Each command has a \`type\` field ("create-node", "update-node", "move-node", or "delete-node") plus type-specific payload fields.
-
-## Current scene context
-
-\`\`\`json
-${contextBlock}
-\`\`\`
-
-## Guidelines
-
-1. Always read the scene first if you need up-to-date information before making changes.
-2. Batch related mutations into a single \`scene_applyCommands\` call when possible.
-3. Respond conversationally after completing the requested changes — summarise what you did.
-4. If a request is ambiguous, ask clarifying questions rather than guessing.`
-}
 
 // ---------------------------------------------------------------------------
 // Factory
