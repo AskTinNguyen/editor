@@ -23,6 +23,12 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       outDir: 'dist/preload',
+      rollupOptions: {
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js',
+        },
+      },
     },
   },
   renderer: {
@@ -31,6 +37,9 @@ export default defineConfig({
     build: {
       outDir: '../../dist/renderer',
       emptyOutDir: true,
+    },
+    define: {
+      'process.env': '{}',
     },
     resolve: {
       alias: {

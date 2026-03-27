@@ -12,7 +12,7 @@ export function createMainWindow() {
     minHeight: 720,
     title: 'Pascal Desktop',
     webPreferences: {
-      preload: join(currentDir, '../preload/index.mjs'),
+      preload: join(currentDir, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
