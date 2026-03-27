@@ -98,13 +98,16 @@ export function useAgentSession(projectId: ProjectId | null) {
 
   // ── Send a user prompt ──────────────────────────────────────────────
   const sendMessage = useCallback(
-    async (prompt: string): Promise<AgentTurnResult | null> => {
+    async (
+      prompt: string,
+      options?: { selectedNodeIds?: string[] },
+    ): Promise<AgentTurnResult | null> => {
       const pid = projectIdRef.current
       if (!pid) return null
 
       setError(null)
       try {
-        const result = await getAgentClient().sendMessage(pid, prompt)
+        const result = await getAgentClient().sendMessage(pid, prompt, options)
         return result
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)

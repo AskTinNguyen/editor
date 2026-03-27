@@ -13,6 +13,8 @@ declare module '@pascal-app/editor' {
     onLoad?: () => Promise<SceneGraph | null>
     onSave?: (scene: SceneGraph) => Promise<void>
     onSaveStatusChange?: (status: SaveStatus) => void
+    onSelect?: (selectedIds: string[]) => void
+    highlightNodeIds?: string[]
   }
 
   export const Editor: ComponentType<EditorProps>

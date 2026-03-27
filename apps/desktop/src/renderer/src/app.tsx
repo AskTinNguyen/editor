@@ -23,6 +23,8 @@ export function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [recentsOpen, setRecentsOpen] = useState(false)
   const [sceneRevision, setSceneRevision] = useState(0)
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
+  const [highlightNodeIds, setHighlightNodeIds] = useState<string[]>([])
 
   // Load the initial project on mount
   useEffect(() => {
@@ -60,6 +62,11 @@ export function App() {
               setCurrentProject(freshProject)
               setSceneRevision((prev) => prev + 1)
               setSaveStatus('idle')
+              // Highlight affected nodes after agent edits
+              if (event.type === 'turn-completed' && event.result.affectedNodeIds?.length > 0) {
+                setHighlightNodeIds(event.result.affectedNodeIds)
+                setTimeout(() => setHighlightNodeIds([]), 4000)
+              }
             })
             .catch(() => {})
         }
@@ -114,13 +121,10 @@ export function App() {
       <WorkbenchShell
         project={currentProject}
         saveStatus={saveStatus}
+        selectedNodeIds={selectedNodeIds}
         onOpenRecents={handleOpenRecents}
         onCreateProject={handleCreateProject}
       >
-        {/* TODO: Wire editor selection tracking here once the Editor component
-            exposes an onSelect prop. When available, track selectedNodeIds in
-            state and pass them to agents.sendMessage via the options parameter
-            so the agent prompt includes selection context. */}
         <Editor
           key={`${currentProject.projectId}_${sceneRevision}`}
           onLoad={async () => currentProject.scene}
@@ -136,6 +140,8 @@ export function App() {
             )
           }}
           onSaveStatusChange={setSaveStatus}
+          onSelect={setSelectedNodeIds}
+          highlightNodeIds={highlightNodeIds}
           projectId={currentProject.projectId}
         />
       </WorkbenchShell>

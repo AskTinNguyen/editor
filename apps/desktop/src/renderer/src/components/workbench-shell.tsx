@@ -10,6 +10,8 @@ export interface WorkbenchShellProps {
   project: PascalProjectFile
   /** Current save status from the editor's auto-save hook. */
   saveStatus: SaveStatus
+  /** IDs of nodes currently selected in the editor canvas. */
+  selectedNodeIds?: string[]
   /** Callback when the user clicks "Open" in the toolbar. */
   onOpenRecents: () => void
   /** Callback when the user clicks "New" in the toolbar. */
@@ -29,6 +31,7 @@ export interface WorkbenchShellProps {
 export function WorkbenchShell({
   project,
   saveStatus,
+  selectedNodeIds,
   onOpenRecents,
   onCreateProject,
   children,
@@ -60,7 +63,7 @@ export function WorkbenchShell({
       </div>
 
       {/* Bottom: mission console */}
-      <MissionConsole projectId={project.projectId} />
+      <MissionConsole projectId={project.projectId} selectedNodeIds={selectedNodeIds} />
 
       {/* Provider settings slide-over */}
       <ProviderSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
