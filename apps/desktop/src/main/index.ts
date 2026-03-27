@@ -10,6 +10,7 @@ import { applyProjectSceneCommands } from './projects/project-command-service'
 import { registerProjectIpc } from './projects/project-ipc'
 import { createProjectStore } from './projects/project-store'
 import { createProvider, type ProviderConfig } from './agents/providers'
+import { loadProviderConfig, resolveProviderFromConfig } from './agents/providers/provider-config'
 
 const rootDir = join(app.getPath('userData'), 'projects')
 
@@ -40,16 +41,10 @@ const toolHandler = {
 }
 
 // ---------------------------------------------------------------------------
-// Provider selection — configure via PASCAL_AGENT_PROVIDER env var
-//
-// Options:
-//   stub                  → deterministic stub (default, no API key needed)
-//   anthropic             → Anthropic Claude (requires ANTHROPIC_API_KEY)
-//   openai                → OpenAI GPT (requires OPENAI_API_KEY)
-//   vesper-gateway        → Vesper AI Gateway (auto-discovers credentials)
+// Provider selection — reads persisted config then falls back to env vars
 // ---------------------------------------------------------------------------
 
-function resolveProviderConfig(): ProviderConfig {
+function resolveProviderConfigFromEnv(): ProviderConfig {
   const providerId = process.env.PASCAL_AGENT_PROVIDER ?? 'stub'
 
   switch (providerId) {
@@ -92,22 +87,31 @@ function resolveProviderConfig(): ProviderConfig {
   }
 }
 
-const provider = createProvider(resolveProviderConfig())
-
 // Late-bound event broadcaster — wired after IPC registration
 let broadcast: ((projectId: ProjectId, event: AgentSessionEvent) => void) | undefined
 
-const sessionManager = createAgentSessionManager({
-  sessionStore,
-  projectStore,
-  provider,
-  toolHandler,
-  onEvent: (projectId, event) => broadcast?.(projectId, event),
-})
+app.whenReady().then(async () => {
+  // Load persisted provider config; fall back to env-var resolution
+  let providerConfig: ProviderConfig
+  try {
+    const persisted = await loadProviderConfig(rootDir)
+    providerConfig = resolveProviderFromConfig(persisted)
+  } catch {
+    providerConfig = resolveProviderConfigFromEnv()
+  }
 
-app.whenReady().then(() => {
+  const provider = createProvider(providerConfig)
+
+  const sessionManager = createAgentSessionManager({
+    sessionStore,
+    projectStore,
+    provider,
+    toolHandler,
+    onEvent: (projectId, event) => broadcast?.(projectId, event),
+  })
+
   registerProjectIpc(projectStore)
-  const agentIpc = registerAgentIpc(sessionManager)
+  const agentIpc = registerAgentIpc(sessionManager, { rootDir, toolHandler })
   broadcast = agentIpc.broadcastEvent
   createMainWindow()
 

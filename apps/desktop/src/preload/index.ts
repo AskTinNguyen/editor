@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { AGENT_IPC_CHANNELS } from '../shared/agents'
+import { AGENT_IPC_CHANNELS, PROVIDER_CONFIG_IPC_CHANNELS } from '../shared/agents'
 import type { PascalDesktopApi } from '../shared/projects'
 
 const pascalDesktopApi: PascalDesktopApi = {
@@ -37,6 +37,12 @@ const pascalDesktopApi: PascalDesktopApi = {
         ipcRenderer.send(AGENT_IPC_CHANNELS.unsubscribe, { projectId })
       }
     },
+    getProviderConfig: () =>
+      ipcRenderer.invoke(PROVIDER_CONFIG_IPC_CHANNELS.get),
+    setProviderConfig: (config) =>
+      ipcRenderer.invoke(PROVIDER_CONFIG_IPC_CHANNELS.set, config),
+    testProviderConnection: (config) =>
+      ipcRenderer.invoke(PROVIDER_CONFIG_IPC_CHANNELS.test, config),
   },
 }
 

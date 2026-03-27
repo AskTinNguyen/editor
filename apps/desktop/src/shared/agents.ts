@@ -1,3 +1,4 @@
+import type { PersistedProviderConfig } from '../main/agents/providers/provider-config'
 import type { ProjectId } from './projects'
 import type { SceneCommand, SceneCommandBatchResult, SceneCommandResult } from '@pascal/scene-engine'
 
@@ -87,6 +88,12 @@ export const AGENT_IPC_CHANNELS = {
   event: 'agents:event',
 } as const
 
+export const PROVIDER_CONFIG_IPC_CHANNELS = {
+  get: 'provider-config:get',
+  set: 'provider-config:set',
+  test: 'provider-config:test',
+} as const
+
 // ---------------------------------------------------------------------------
 // Code execution (pascal_execute gateway)
 // ---------------------------------------------------------------------------
@@ -128,4 +135,7 @@ export type PascalDesktopAgentsApi = {
     options?: { selectedNodeIds?: string[] },
   ): Promise<AgentTurnResult>
   subscribe(projectId: ProjectId, listener: (event: AgentSessionEvent) => void): () => void
+  getProviderConfig(): Promise<PersistedProviderConfig>
+  setProviderConfig(config: PersistedProviderConfig): Promise<void>
+  testProviderConnection(config: PersistedProviderConfig): Promise<{ ok: boolean; error?: string }>
 }
