@@ -41,6 +41,7 @@ import { PresetThumbnailGenerator } from './preset-thumbnail-generator'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
 import { ThumbnailGenerator } from './thumbnail-generator'
+import { AgentHighlightManager } from './agent-highlight-manager'
 import { WallMeasurementLabel } from './wall-measurement-label'
 
 let hasInitializedEditorRuntime = false
@@ -82,6 +83,10 @@ export interface EditorProps {
 
   // Presets storage backend (defaults to localStorage)
   presetsAdapter?: PresetsAdapter
+
+  // Agent bridge — selection callback and node highlighting
+  onSelect?: (selectedIds: string[]) => void
+  highlightNodeIds?: string[]
 }
 
 function EditorSceneCrashFallback() {
@@ -318,6 +323,8 @@ export default function Editor({
   settingsPanelProps,
   sitePanelProps,
   presetsAdapter,
+  onSelect,
+  highlightNodeIds,
 }: EditorProps) {
   useKeyboard()
 
@@ -400,6 +407,20 @@ export default function Editor({
     setIsCameraControlsHintVisible(!readCameraControlsHintDismissed())
   }, [])
 
+  // Notify host when selection changes
+  useEffect(() => {
+    if (!onSelect) return
+    let prevIds: string[] = []
+    const unsubscribe = useViewer.subscribe((state) => {
+      const currentIds = state.selection.selectedIds
+      if (JSON.stringify(currentIds) !== JSON.stringify(prevIds)) {
+        prevIds = [...currentIds]
+        onSelect(prevIds)
+      }
+    })
+    return unsubscribe
+  }, [onSelect])
+
   const showLoader = isLoading || isSceneLoading
   const dismissCameraControlsHint = useCallback(() => {
     setIsCameraControlsHintVisible(false)
@@ -460,6 +481,9 @@ export default function Editor({
               <PresetThumbnailGenerator />
               {!isPreviewMode && <SiteEdgeLabels />}
               {isPreviewMode && <InteractiveSystem />}
+              {highlightNodeIds && highlightNodeIds.length > 0 && (
+                <AgentHighlightManager nodeIds={highlightNodeIds} />
+              )}
             </Viewer>
           </div>
           {!(isPreviewMode || isLoading) && <ZoneLabelEditorSystem />}
