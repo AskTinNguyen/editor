@@ -27,6 +27,7 @@ type SceneContext = {
 export function buildSystemPrompt(
   sceneContext: unknown,
   selectionContext?: { selectedNodeIds: string[]; selectedNodeTypes: string[] },
+  projectId?: string,
 ): string {
   const scene = sceneContext as SceneContext | null | undefined
   const nodes = scene?.nodes ?? {}
@@ -63,6 +64,9 @@ The scene is a flat dictionary of nodes: { nodes: Record<id, Node>, rootNodeIds:
 Each node has: id, type, parentId, children, object: "node", visible, metadata
 Hierarchy: site → building → level → [wall, zone, slab, ceiling, roof, scan, guide]
 Walls can have children: [door, window, item]
+
+## Current Project
+${projectId ? `Project ID: ${projectId} — use this ID for all tool calls.` : 'Project ID will be provided in the user message.'}
 
 ## Current Scene
 ${nodeCount} nodes of types: ${nodeTypeSummary}

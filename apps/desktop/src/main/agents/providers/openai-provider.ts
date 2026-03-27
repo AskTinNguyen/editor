@@ -85,7 +85,7 @@ export function createOpenAIProvider(
   return {
     name: 'openai',
 
-    async runTurn({ projectId: _projectId, prompt, sceneContext, messageHistory, tools: toolHandler, selectionContext }) {
+    async runTurn({ projectId, prompt, sceneContext, messageHistory, tools: toolHandler, selectionContext }) {
       const client = new OpenAI({
         apiKey: config.apiKey,
         baseURL: config.baseURL,
@@ -93,7 +93,7 @@ export function createOpenAIProvider(
 
       // -- Build the messages array ----------------------------------------
 
-      const systemPrompt = buildSystemPrompt(sceneContext, selectionContext)
+      const systemPrompt = buildSystemPrompt(sceneContext, selectionContext, projectId)
 
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },

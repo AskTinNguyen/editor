@@ -72,7 +72,7 @@ export function createAnthropicProvider(
   return {
     name: 'anthropic',
 
-    async runTurn({ prompt, sceneContext, messageHistory, tools: toolHandler, selectionContext }) {
+    async runTurn({ projectId, prompt, sceneContext, messageHistory, tools: toolHandler, selectionContext }) {
       // Dynamic import so the module can be loaded without the SDK installed.
       // The SDK is only needed when runTurn is actually called.
       const Anthropic = (await import('@anthropic-ai/sdk')).default
@@ -82,7 +82,7 @@ export function createAnthropicProvider(
         ...(config.baseURL ? { baseURL: config.baseURL } : {}),
       })
 
-      const systemPrompt = buildSystemPrompt(sceneContext, selectionContext)
+      const systemPrompt = buildSystemPrompt(sceneContext, selectionContext, projectId)
 
       // Build the Anthropic messages array from history + current prompt
       type MessageParam = InstanceType<typeof Anthropic>['messages'] extends {
