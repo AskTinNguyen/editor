@@ -5,38 +5,31 @@ import type {
   AgentSessionEvent,
   AgentSessionStatus,
   AgentTurnResult,
-  ExecutionLogEntry,
-  PascalExecuteRequest,
-  PascalExecuteResult,
 } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
+import type { PascalAgentProvider, PascalToolCallHandler } from './agent-provider'
 import type { createAgentSessionStore } from './agent-session-store'
 import type { createProjectStore } from '../projects/project-store'
-import type { PascalAgentProvider } from './agent-provider'
 
 // ---------------------------------------------------------------------------
-// Dependency-injected executor interface (Worker E builds the real one)
-// ---------------------------------------------------------------------------
-
-type CodeExecutor = {
-  execute(request: PascalExecuteRequest): Promise<PascalExecuteResult>
-}
-
-// ---------------------------------------------------------------------------
-// Session manager
+// Types
 // ---------------------------------------------------------------------------
 
 type SessionStore = ReturnType<typeof createAgentSessionStore>
 type ProjectStore = ReturnType<typeof createProjectStore>
 
+// ---------------------------------------------------------------------------
+// Session manager
+// ---------------------------------------------------------------------------
+
 export function createAgentSessionManager(deps: {
   sessionStore: SessionStore
   projectStore: ProjectStore
-  executor: CodeExecutor
   provider: PascalAgentProvider
+  toolHandler: PascalToolCallHandler
   onEvent?: (projectId: ProjectId, event: AgentSessionEvent) => void
 }) {
-  const { sessionStore, projectStore, executor, onEvent } = deps
+  const { sessionStore, projectStore, provider, toolHandler, onEvent } = deps
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -87,54 +80,39 @@ export function createAgentSessionManager(deps: {
       // 5. Set status to 'planning'
       await setStatus(session, 'planning')
 
-      // 6. Generate code via provider
-      const code = await deps.provider.generateCode({
+      // 6. Set status to 'applying'
+      await setStatus(session, 'applying')
+
+      // 7. Run the provider turn — provider handles LLM + tool-use loop
+      const turnOutput = await provider.runTurn({
         projectId,
         prompt,
         sceneContext: project.scene,
+        messageHistory: session.messages,
+        tools: toolHandler,
       })
 
-      // 7. Set status to 'applying'
-      await setStatus(session, 'applying')
-
-      // 8. Execute via executor
-      const execResult = await executor.execute({ code, projectId })
-
-      // 9. Build AgentTurnResult from execution result
-      const sceneCommandsApplied = execResult.logs.filter(
-        (entry: ExecutionLogEntry) => entry.type === 'tool-call' && entry.tool === 'scene_applyCommands',
-      ).length
-
+      // 8. Build AgentTurnResult
       const turnResult: AgentTurnResult = {
-        status: execResult.status === 'completed' ? 'completed' : 'error',
-        summary:
-          execResult.status === 'completed'
-            ? `Processed prompt and applied ${sceneCommandsApplied} scene command(s).`
-            : `Execution failed: ${execResult.error ?? 'unknown error'}`,
-        executionLog: execResult.logs,
-        sceneCommandsApplied,
-        error: execResult.error,
+        status: 'completed',
+        summary: turnOutput.response,
+        executionLog: [],
+        sceneCommandsApplied: turnOutput.toolCallsExecuted,
       }
 
-      // Emit execution log entries individually
-      for (const entry of execResult.logs) {
-        emit(projectId, { type: 'execution-log', entry })
-      }
-
-      // 10. Add agent message with summary
+      // 9. Add agent message with summary
       const agentMessage = createMessage('agent', turnResult.summary)
       session.messages.push(agentMessage)
       emit(projectId, { type: 'message-added', message: agentMessage })
 
-      // 11. Set status to 'completed' or 'error'
+      // 10. Set status to 'completed'
       session.lastTurnResult = turnResult
-      await setStatus(session, turnResult.status === 'completed' ? 'completed' : 'error')
+      await setStatus(session, 'completed')
 
-      // 12. Save session, emit turn-completed
+      // 11. Save session, emit turn-completed
       await sessionStore.saveSession(session)
       emit(projectId, { type: 'turn-completed', result: turnResult })
 
-      // 13. Return result
       return turnResult
     } catch (err) {
       // Unhandled errors during the turn

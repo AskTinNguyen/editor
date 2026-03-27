@@ -1,9 +1,10 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import type { AgentSessionEvent } from '../shared/agents'
+import type { ProjectId } from '../shared/projects'
 import { registerAgentIpc } from './agents/agent-ipc'
 import { createAgentSessionManager } from './agents/agent-session-manager'
 import { createAgentSessionStore } from './agents/agent-session-store'
-import { createPascalCodeExecutor } from './agents/pascal-code-executor'
 import { createStubAgentProvider } from './agents/stub-agent-provider'
 import { createMainWindow } from './create-main-window'
 import { applyProjectSceneCommands } from './projects/project-command-service'
@@ -15,16 +16,20 @@ const rootDir = join(app.getPath('userData'), 'projects')
 const projectStore = createProjectStore({ rootDir })
 const sessionStore = createAgentSessionStore({ rootDir })
 
-const executor = createPascalCodeExecutor({
-  project_read: async (projectId) => {
+// Tool handler — host-owned callbacks that route to trusted desktop APIs
+const toolHandler = {
+  project_read: async (projectId: ProjectId) => {
     const project = await projectStore.openProjectById(projectId)
     return { name: project.name, scene: project.scene }
   },
-  scene_read: async (projectId) => {
+  scene_read: async (projectId: ProjectId) => {
     const project = await projectStore.openProjectById(projectId)
     return project.scene
   },
-  scene_applyCommands: async (payload) => {
+  scene_applyCommands: async (payload: {
+    projectId: ProjectId
+    commands: any[]
+  }) => {
     const result = await applyProjectSceneCommands(
       projectStore,
       payload.projectId,
@@ -32,21 +37,19 @@ const executor = createPascalCodeExecutor({
     )
     return result
   },
-})
-
-import type { AgentSessionEvent } from '../shared/agents'
-import type { ProjectId } from '../shared/projects'
+}
 
 // Late-bound event broadcaster — wired after IPC registration
 let broadcast: ((projectId: ProjectId, event: AgentSessionEvent) => void) | undefined
 
+// TODO: Replace with real LLM provider (anthropic, openai, vesper-gateway)
 const provider = createStubAgentProvider()
 
 const sessionManager = createAgentSessionManager({
   sessionStore,
   projectStore,
-  executor,
   provider,
+  toolHandler,
   onEvent: (projectId, event) => broadcast?.(projectId, event),
 })
 

@@ -3,20 +3,21 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createProjectStore } from '../projects/project-store'
+import { applyProjectSceneCommands } from '../projects/project-command-service'
 import { createAgentSessionStore } from './agent-session-store'
 import { createAgentSessionManager } from './agent-session-manager'
-import { createPascalCodeExecutor } from './pascal-code-executor'
 import { createStubAgentProvider } from './stub-agent-provider'
-import { applyProjectSceneCommands } from '../projects/project-command-service'
+import type { PascalAgentProvider, PascalToolCallHandler } from './agent-provider'
 import type { AgentSessionEvent } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
-import type { PascalAgentProvider } from './agent-provider'
 
 // ---------------------------------------------------------------------------
-// Test helper — wire executor tools to the real project store
+// Test helper — wire tool handler to the real project store
 // ---------------------------------------------------------------------------
 
-function createTestTools(projectStore: ReturnType<typeof createProjectStore>) {
+function createTestToolHandler(
+  projectStore: ReturnType<typeof createProjectStore>,
+): PascalToolCallHandler {
   return {
     project_read: async (projectId: ProjectId) => {
       const project = await projectStore.openProjectById(projectId)
@@ -27,19 +28,23 @@ function createTestTools(projectStore: ReturnType<typeof createProjectStore>) {
       return project.scene
     },
     scene_applyCommands: async (payload: { projectId: ProjectId; commands: any[] }) => {
-      const result = await applyProjectSceneCommands(projectStore, payload.projectId, payload.commands)
-      return result
+      return applyProjectSceneCommands(projectStore, payload.projectId, payload.commands)
     },
   }
 }
 
 // ---------------------------------------------------------------------------
-// Minimal provider for existing tests (read-only — no scene mutations)
+// Minimal provider for read-only tests
 // ---------------------------------------------------------------------------
 
 const minimalProvider: PascalAgentProvider = {
-  async generateCode({ projectId }) {
-    return `const p = await pascal.project_read('${projectId}')`
+  name: 'minimal-test',
+  async runTurn({ tools, projectId }) {
+    const project = await tools.project_read(projectId)
+    return {
+      response: `Read project "${project.name}".`,
+      toolCallsExecuted: 1,
+    }
   },
 }
 
@@ -49,14 +54,12 @@ const minimalProvider: PascalAgentProvider = {
 
 describe('AgentSessionManager integration', () => {
   test('sendMessage emits status events in the correct order', async () => {
-    const projectDir = await mkdtemp(join(tmpdir(), 'pascal-sm-status-'))
-    const sessionDir = await mkdtemp(join(tmpdir(), 'pascal-sm-session-'))
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
 
     try {
-      const projectStore = createProjectStore({ rootDir: projectDir })
-      const sessionStore = createAgentSessionStore({ rootDir: sessionDir })
-      const tools = createTestTools(projectStore)
-      const executor = createPascalCodeExecutor(tools)
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
 
       const events: AgentSessionEvent[] = []
       const onEvent = mock(((_projectId: ProjectId, event: AgentSessionEvent) => {
@@ -66,67 +69,51 @@ describe('AgentSessionManager integration', () => {
       const manager = createAgentSessionManager({
         sessionStore,
         projectStore,
-        executor,
         provider: minimalProvider,
+        toolHandler,
         onEvent,
       })
 
-      // Create a project so we have a valid ID
       const project = await projectStore.createProject({ name: 'Status Test' })
-
-      // Send a message through the full lifecycle
       await manager.sendMessage(project.projectId, 'Add a wall to the scene')
 
-      // Extract status-changed events in order
       const statusEvents = events
         .filter((e): e is Extract<AgentSessionEvent, { type: 'status-changed' }> => e.type === 'status-changed')
         .map((e) => e.status)
 
-      // The lifecycle must walk through: reading -> planning -> applying -> completed
       expect(statusEvents).toEqual(['reading', 'planning', 'applying', 'completed'])
-
-      // onEvent should have been called multiple times
       expect(onEvent).toHaveBeenCalled()
 
-      // Verify we also got message-added events (user + agent)
       const messageEvents = events.filter((e) => e.type === 'message-added')
       expect(messageEvents.length).toBeGreaterThanOrEqual(2)
 
-      // Verify we got a turn-completed event
       const turnCompletedEvents = events.filter((e) => e.type === 'turn-completed')
       expect(turnCompletedEvents.length).toBe(1)
     } finally {
-      await rm(projectDir, { force: true, recursive: true })
-      await rm(sessionDir, { force: true, recursive: true })
+      await rm(rootDir, { force: true, recursive: true })
     }
   })
 
   test('sendMessage persists session with user and agent messages', async () => {
-    const projectDir = await mkdtemp(join(tmpdir(), 'pascal-sm-persist-'))
-    const sessionDir = await mkdtemp(join(tmpdir(), 'pascal-sm-session-'))
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
 
     try {
-      const projectStore = createProjectStore({ rootDir: projectDir })
-      const sessionStore = createAgentSessionStore({ rootDir: sessionDir })
-      const tools = createTestTools(projectStore)
-      const executor = createPascalCodeExecutor(tools)
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
 
       const manager = createAgentSessionManager({
         sessionStore,
         projectStore,
-        executor,
         provider: minimalProvider,
+        toolHandler,
       })
 
       const project = await projectStore.createProject({ name: 'Persist Test' })
-
-      // Send a message
       await manager.sendMessage(project.projectId, 'Show me the current layout')
 
-      // Retrieve the session again and verify persistence
       const session = await manager.getSession(project.projectId)
 
-      // Should have both user and agent messages
       expect(session.messages.length).toBe(2)
 
       const userMessage = session.messages.find((m) => m.role === 'user')
@@ -137,44 +124,34 @@ describe('AgentSessionManager integration', () => {
       expect(agentMessage).toBeDefined()
       expect(agentMessage!.content.length).toBeGreaterThan(0)
 
-      // Session status should be 'completed' after a successful turn
       expect(session.status).toBe('completed')
-
-      // Verify timestamps are ISO strings
       expect(userMessage!.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
       expect(agentMessage!.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/)
-
-      // Verify lastTurnResult is persisted
       expect(session.lastTurnResult).not.toBeNull()
       expect(session.lastTurnResult!.status).toBe('completed')
     } finally {
-      await rm(projectDir, { force: true, recursive: true })
-      await rm(sessionDir, { force: true, recursive: true })
+      await rm(rootDir, { force: true, recursive: true })
     }
   })
 
   test('sendMessage returns a completed turn result', async () => {
-    const projectDir = await mkdtemp(join(tmpdir(), 'pascal-sm-result-'))
-    const sessionDir = await mkdtemp(join(tmpdir(), 'pascal-sm-session-'))
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
 
     try {
-      const projectStore = createProjectStore({ rootDir: projectDir })
-      const sessionStore = createAgentSessionStore({ rootDir: sessionDir })
-      const tools = createTestTools(projectStore)
-      const executor = createPascalCodeExecutor(tools)
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
 
       const manager = createAgentSessionManager({
         sessionStore,
         projectStore,
-        executor,
         provider: minimalProvider,
+        toolHandler,
       })
 
       const project = await projectStore.createProject({ name: 'Result Test' })
-
       const result = await manager.sendMessage(project.projectId, 'Read the project')
 
-      // Verify result structure
       expect(result.status).toBe('completed')
       expect(typeof result.summary).toBe('string')
       expect(result.summary.length).toBeGreaterThan(0)
@@ -182,31 +159,26 @@ describe('AgentSessionManager integration', () => {
       expect(typeof result.sceneCommandsApplied).toBe('number')
       expect(result.error).toBeUndefined()
     } finally {
-      await rm(projectDir, { force: true, recursive: true })
-      await rm(sessionDir, { force: true, recursive: true })
+      await rm(rootDir, { force: true, recursive: true })
     }
   })
 
   test('getSession returns an idle session for a new project', async () => {
-    const projectDir = await mkdtemp(join(tmpdir(), 'pascal-sm-idle-'))
-    const sessionDir = await mkdtemp(join(tmpdir(), 'pascal-sm-session-'))
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
 
     try {
-      const projectStore = createProjectStore({ rootDir: projectDir })
-      const sessionStore = createAgentSessionStore({ rootDir: sessionDir })
-      const tools = createTestTools(projectStore)
-      const executor = createPascalCodeExecutor(tools)
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
 
       const manager = createAgentSessionManager({
         sessionStore,
         projectStore,
-        executor,
         provider: minimalProvider,
+        toolHandler,
       })
 
       const project = await projectStore.createProject({ name: 'Idle Test' })
-
-      // Get session without sending anything
       const session = await manager.getSession(project.projectId)
 
       expect(session.status).toBe('idle')
@@ -217,117 +189,91 @@ describe('AgentSessionManager integration', () => {
       expect(session.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
       expect(session.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     } finally {
-      await rm(projectDir, { force: true, recursive: true })
-      await rm(sessionDir, { force: true, recursive: true })
+      await rm(rootDir, { force: true, recursive: true })
     }
   })
 
   test('sendMessage returns error for unknown project', async () => {
-    const projectDir = await mkdtemp(join(tmpdir(), 'pascal-sm-err-'))
-    const sessionDir = await mkdtemp(join(tmpdir(), 'pascal-sm-session-'))
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
 
     try {
-      const projectStore = createProjectStore({ rootDir: projectDir })
-      const sessionStore = createAgentSessionStore({ rootDir: sessionDir })
-      const tools = createTestTools(projectStore)
-      const executor = createPascalCodeExecutor(tools)
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
 
       const events: AgentSessionEvent[] = []
       const manager = createAgentSessionManager({
         sessionStore,
         projectStore,
-        executor,
         provider: minimalProvider,
+        toolHandler,
         onEvent: (_projectId, event) => {
           events.push(event)
         },
       })
 
       const fakeProjectId = 'project_nonexistent000000000000' as ProjectId
-
-      // sendMessage for a project that doesn't exist should return error, not throw
       const result = await manager.sendMessage(fakeProjectId, 'Do something')
 
       expect(result.status).toBe('error')
       expect(typeof result.error).toBe('string')
       expect(result.error!.length).toBeGreaterThan(0)
 
-      // Session should be in error state
       const session = await manager.getSession(fakeProjectId)
       expect(session.status).toBe('error')
-
-      // Should have both user and agent (error summary) messages
       expect(session.messages.length).toBe(2)
       expect(session.messages[0]!.role).toBe('user')
       expect(session.messages[1]!.role).toBe('agent')
 
-      // Status events should end with 'error'
       const statusEvents = events
         .filter((e): e is Extract<AgentSessionEvent, { type: 'status-changed' }> => e.type === 'status-changed')
         .map((e) => e.status)
 
-      // The error happens at step 3 (openProjectById fails), so we get: reading -> error
       expect(statusEvents[0]).toBe('reading')
       expect(statusEvents[statusEvents.length - 1]).toBe('error')
 
-      // Should have a turn-completed event
       const turnCompleted = events.find((e) => e.type === 'turn-completed')
       expect(turnCompleted).toBeDefined()
     } finally {
-      await rm(projectDir, { force: true, recursive: true })
-      await rm(sessionDir, { force: true, recursive: true })
+      await rm(rootDir, { force: true, recursive: true })
     }
   })
 
   test('sendMessage with stub provider creates a wall and persists it', async () => {
-    const projectDir = await mkdtemp(join(tmpdir(), 'pascal-sm-e2e-'))
-    const sessionDir = await mkdtemp(join(tmpdir(), 'pascal-sm-session-'))
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
 
     try {
-      const projectStore = createProjectStore({ rootDir: projectDir })
-      const sessionStore = createAgentSessionStore({ rootDir: sessionDir })
-      const tools = createTestTools(projectStore)
-      const executor = createPascalCodeExecutor(tools)
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
       const provider = createStubAgentProvider()
 
       const manager = createAgentSessionManager({
         sessionStore,
         projectStore,
-        executor,
         provider,
+        toolHandler,
       })
 
-      // Create a project so we have a valid ID
       const project = await projectStore.createProject({ name: 'E2E Wall Test' })
 
-      // Record initial node count
       const before = await projectStore.openProjectById(project.projectId)
       const initialNodeCount = Object.keys(before.scene.nodes).length
 
-      // Send a message through the full lifecycle — stub provider sees "wall" and generates code
       const result = await manager.sendMessage(project.projectId, 'add a wall')
 
-      // Assert the turn completed successfully
       expect(result.status).toBe('completed')
-
-      // Assert scene commands were applied
       expect(result.sceneCommandsApplied).toBeGreaterThan(0)
 
-      // Assert the summary reports applied commands
-      expect(result.summary).toContain('scene command(s)')
-
-      // Reopen the project from disk and verify the wall was persisted
       const reopened = await projectStore.openProjectById(project.projectId)
       const wallNodes = Object.values(reopened.scene.nodes).filter(
         (n) => (n as { type: string }).type === 'wall',
       )
       expect(wallNodes.length).toBeGreaterThan(0)
 
-      // Verify the node count increased
       const finalNodeCount = Object.keys(reopened.scene.nodes).length
       expect(finalNodeCount).toBeGreaterThan(initialNodeCount)
 
-      // Verify session state is consistent
       const session = await manager.getSession(project.projectId)
       expect(session.status).toBe('completed')
       expect(session.messages.length).toBe(2)
@@ -337,8 +283,7 @@ describe('AgentSessionManager integration', () => {
       expect(session.lastTurnResult).not.toBeNull()
       expect(session.lastTurnResult!.sceneCommandsApplied).toBeGreaterThan(0)
     } finally {
-      await rm(projectDir, { force: true, recursive: true })
-      await rm(sessionDir, { force: true, recursive: true })
+      await rm(rootDir, { force: true, recursive: true })
     }
   })
 })
