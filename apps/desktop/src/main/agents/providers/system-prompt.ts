@@ -24,7 +24,10 @@ type SceneContext = {
  * - Current scene summary (node count, types, level IDs)
  * - Important rules for node creation and mutation
  */
-export function buildSystemPrompt(sceneContext: unknown): string {
+export function buildSystemPrompt(
+  sceneContext: unknown,
+  selectionContext?: { selectedNodeIds: string[]; selectedNodeTypes: string[] },
+): string {
   const scene = sceneContext as SceneContext | null | undefined
   const nodes = scene?.nodes ?? {}
   const nodeEntries = Object.values(nodes)
@@ -48,6 +51,11 @@ export function buildSystemPrompt(sceneContext: unknown): string {
     .filter(Boolean)
   const levelIdList = levelIds.length > 0 ? levelIds.join(', ') : '(none)'
 
+  const selectionSection =
+    selectionContext && selectionContext.selectedNodeIds.length > 0
+      ? `\n## Current Selection\nThe user has selected ${selectionContext.selectedNodeIds.length} node(s): ${selectionContext.selectedNodeIds.join(', ')} (types: ${selectionContext.selectedNodeTypes.join(', ')}).\nWhen the user refers to "this", "the selected", or "it", they mean these nodes.\n`
+      : ''
+
   return `You are a Pascal scene editing assistant. You help users modify architectural floor plans by reading the scene graph and applying scene commands.
 
 ## Scene Graph Structure
@@ -59,7 +67,7 @@ Walls can have children: [door, window, item]
 ## Current Scene
 ${nodeCount} nodes of types: ${nodeTypeSummary}
 Level nodes: ${levelIdList}
-
+${selectionSection}
 ## Available Tools
 - project_read(projectId): Read project name and full scene graph
 - scene_read(projectId): Read only the scene graph

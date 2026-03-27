@@ -151,6 +151,32 @@ describe('buildSystemPrompt', () => {
     expect(promptUndefined).toContain('Important Rules')
   })
 
+  test('includes selection context section when selection is provided', () => {
+    const prompt = buildSystemPrompt(sampleScene, {
+      selectedNodeIds: ['wall_001', 'zone_001'],
+      selectedNodeTypes: ['wall', 'zone'],
+    })
+    expect(prompt).toContain('## Current Selection')
+    expect(prompt).toContain('2 node(s)')
+    expect(prompt).toContain('wall_001')
+    expect(prompt).toContain('zone_001')
+    expect(prompt).toContain('types: wall, zone')
+    expect(prompt).toContain('When the user refers to "this", "the selected", or "it"')
+  })
+
+  test('omits selection section when no selection is provided', () => {
+    const prompt = buildSystemPrompt(sampleScene)
+    expect(prompt).not.toContain('## Current Selection')
+  })
+
+  test('omits selection section when selection has empty node IDs', () => {
+    const prompt = buildSystemPrompt(sampleScene, {
+      selectedNodeIds: [],
+      selectedNodeTypes: [],
+    })
+    expect(prompt).not.toContain('## Current Selection')
+  })
+
   test('lists multiple level IDs when present', () => {
     const multiLevelScene = makeScene({
       level_001: { type: 'level', id: 'level_001', parentId: 'building_001' },

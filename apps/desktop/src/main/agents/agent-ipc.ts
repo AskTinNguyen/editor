@@ -70,8 +70,8 @@ export function registerAgentIpc(manager: AgentSessionManager) {
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.sendMessage,
-    (_event, { projectId, prompt }: { projectId: ProjectId; prompt: string }) =>
-      manager.sendMessage(projectId, prompt),
+    (_event, { projectId, prompt, options }: { projectId: ProjectId; prompt: string; options?: { selectedNodeIds?: string[] } }) =>
+      manager.sendMessage(projectId, prompt, options),
   )
 
   // Fire-and-forget subscription handlers (on/send)

@@ -47,6 +47,7 @@ export type AgentTurnResult = {
   summary: string
   executionLog: ExecutionLogEntry[]
   sceneCommandsApplied: number
+  affectedNodeIds: string[]
   error?: string
 }
 
@@ -121,6 +122,10 @@ export type PascalProxyTools = {
 
 export type PascalDesktopAgentsApi = {
   getSession(projectId: ProjectId): Promise<AgentSession>
-  sendMessage(projectId: ProjectId, prompt: string): Promise<AgentTurnResult>
+  sendMessage(
+    projectId: ProjectId,
+    prompt: string,
+    options?: { selectedNodeIds?: string[] },
+  ): Promise<AgentTurnResult>
   subscribe(projectId: ProjectId, listener: (event: AgentSessionEvent) => void): () => void
 }

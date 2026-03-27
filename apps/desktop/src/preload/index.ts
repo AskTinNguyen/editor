@@ -16,8 +16,8 @@ const pascalDesktopApi: PascalDesktopApi = {
   agents: {
     getSession: (projectId) =>
       ipcRenderer.invoke(AGENT_IPC_CHANNELS.getSession, { projectId }),
-    sendMessage: (projectId, prompt) =>
-      ipcRenderer.invoke(AGENT_IPC_CHANNELS.sendMessage, { projectId, prompt }),
+    sendMessage: (projectId, prompt, options) =>
+      ipcRenderer.invoke(AGENT_IPC_CHANNELS.sendMessage, { projectId, prompt, options }),
     subscribe: (projectId, listener) => {
       ipcRenderer.send(AGENT_IPC_CHANNELS.subscribe, { projectId })
 

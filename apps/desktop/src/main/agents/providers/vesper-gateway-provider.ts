@@ -84,7 +84,7 @@ export function createVesperGatewayProvider(
   return {
     name: 'vesper-gateway',
 
-    async runTurn({ prompt, sceneContext, messageHistory, tools: toolHandler }) {
+    async runTurn({ prompt, sceneContext, messageHistory, tools: toolHandler, selectionContext }) {
       // Resolve credentials: explicit config > auto-discovery
       let authToken = config?.authToken
       let baseUrl = config?.baseUrl
@@ -125,7 +125,7 @@ export function createVesperGatewayProvider(
         baseURL: baseUrl,
       })
 
-      const systemPrompt = buildSystemPrompt(sceneContext)
+      const systemPrompt = buildSystemPrompt(sceneContext, selectionContext)
 
       // Build the Anthropic messages array from history + current prompt
       type MessageParam = InstanceType<typeof Anthropic>['messages'] extends {

@@ -117,6 +117,10 @@ export function App() {
         onOpenRecents={handleOpenRecents}
         onCreateProject={handleCreateProject}
       >
+        {/* TODO: Wire editor selection tracking here once the Editor component
+            exposes an onSelect prop. When available, track selectedNodeIds in
+            state and pass them to agents.sendMessage via the options parameter
+            so the agent prompt includes selection context. */}
         <Editor
           key={`${currentProject.projectId}_${sceneRevision}`}
           onLoad={async () => currentProject.scene}

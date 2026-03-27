@@ -54,6 +54,34 @@ export function createAgentSessionManager(deps: {
   }
 
   // ---------------------------------------------------------------------------
+  // Tracking tool handler — wraps the base handler to capture affected node IDs
+  // ---------------------------------------------------------------------------
+
+  function createTrackingToolHandler(base: PascalToolCallHandler) {
+    const affectedNodeIds: string[] = []
+
+    return {
+      handler: {
+        ...base,
+        scene_applyCommands: async (payload: Parameters<PascalToolCallHandler['scene_applyCommands']>[0]) => {
+          // Extract node IDs from commands
+          for (const cmd of payload.commands as Array<Record<string, unknown>>) {
+            if (cmd.type === 'create-node' && cmd.node) {
+              const node = cmd.node as Record<string, unknown>
+              if (typeof node.id === 'string') affectedNodeIds.push(node.id)
+            }
+            if (cmd.type === 'update-node' && typeof cmd.nodeId === 'string') affectedNodeIds.push(cmd.nodeId)
+            if (cmd.type === 'move-node' && typeof cmd.nodeId === 'string') affectedNodeIds.push(cmd.nodeId)
+            if (cmd.type === 'delete-node' && typeof cmd.nodeId === 'string') affectedNodeIds.push(cmd.nodeId)
+          }
+          return base.scene_applyCommands(payload)
+        },
+      } satisfies PascalToolCallHandler,
+      getAffectedNodeIds: () => [...affectedNodeIds],
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
 
@@ -61,7 +89,11 @@ export function createAgentSessionManager(deps: {
     return sessionStore.getSession(projectId)
   }
 
-  async function sendMessage(projectId: ProjectId, prompt: string): Promise<AgentTurnResult> {
+  async function sendMessage(
+    projectId: ProjectId,
+    prompt: string,
+    options?: { selectedNodeIds?: string[] },
+  ): Promise<AgentTurnResult> {
     // 1. Load session
     const session = await sessionStore.getSession(projectId)
 
@@ -83,21 +115,37 @@ export function createAgentSessionManager(deps: {
       // 6. Set status to 'applying'
       await setStatus(session, 'applying')
 
-      // 7. Run the provider turn — provider handles LLM + tool-use loop
+      // 7. Build selection context from the loaded scene if node IDs are provided
+      let selectionContext: { selectedNodeIds: string[]; selectedNodeTypes: string[] } | undefined
+      if (options?.selectedNodeIds && options.selectedNodeIds.length > 0) {
+        const sceneNodes = (project.scene as { nodes?: Record<string, { type?: string }> })?.nodes ?? {}
+        const selectedNodeTypes = options.selectedNodeIds.map((id) => sceneNodes[id]?.type ?? 'unknown')
+        selectionContext = {
+          selectedNodeIds: options.selectedNodeIds,
+          selectedNodeTypes,
+        }
+      }
+
+      // 8. Create tracking tool handler to capture affected node IDs
+      const tracking = createTrackingToolHandler(toolHandler)
+
+      // 9. Run the provider turn — provider handles LLM + tool-use loop
       const turnOutput = await provider.runTurn({
         projectId,
         prompt,
         sceneContext: project.scene,
         messageHistory: session.messages,
-        tools: toolHandler,
+        tools: tracking.handler,
+        selectionContext,
       })
 
-      // 8. Build AgentTurnResult
+      // 10. Build AgentTurnResult
       const turnResult: AgentTurnResult = {
         status: 'completed',
         summary: turnOutput.response,
         executionLog: [],
         sceneCommandsApplied: turnOutput.toolCallsExecuted,
+        affectedNodeIds: tracking.getAffectedNodeIds(),
       }
 
       // 9. Add agent message with summary
@@ -123,6 +171,7 @@ export function createAgentSessionManager(deps: {
         summary: `Agent turn failed: ${errorMessage}`,
         executionLog: [],
         sceneCommandsApplied: 0,
+        affectedNodeIds: [],
         error: errorMessage,
       }
 

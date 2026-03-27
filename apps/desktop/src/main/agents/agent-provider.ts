@@ -102,6 +102,10 @@ export type PascalAgentProvider = {
     sceneContext: unknown
     messageHistory: AgentMessage[]
     tools: PascalToolCallHandler
+    selectionContext?: {
+      selectedNodeIds: string[]
+      selectedNodeTypes: string[]
+    }
   }): Promise<{
     response: string
     toolCallsExecuted: number
