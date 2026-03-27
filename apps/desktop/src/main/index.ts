@@ -11,6 +11,8 @@ import { registerProjectIpc } from './projects/project-ipc'
 import { createProjectStore } from './projects/project-store'
 import { createProvider, type ProviderConfig } from './agents/providers'
 import { loadProviderConfig, resolveProviderFromConfig } from './agents/providers/provider-config'
+import { createVesperBridge, type VesperBridgeConfig } from './agents/vesper-bridge'
+import { getAiGatewayCredentials } from './agents/providers/ai-gateway-credentials'
 
 const rootDir = join(app.getPath('userData'), 'projects')
 
@@ -87,6 +89,37 @@ function resolveProviderConfigFromEnv(): ProviderConfig {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Bridge config resolution — maps provider config to Vesper bridge config
+// ---------------------------------------------------------------------------
+
+function resolveBridgeConfig(config: ProviderConfig): VesperBridgeConfig | null {
+  switch (config.provider) {
+    case 'anthropic':
+      return {
+        apiKey: config.config.apiKey,
+        model: config.config.model,
+        baseURL: config.config.baseURL,
+      }
+    case 'vesper-gateway': {
+      const creds = getAiGatewayCredentials()
+      if (!creds) return null
+      return {
+        apiKey: creds.authToken,
+        baseURL: creds.baseUrl,
+        model: config.config?.model,
+      }
+    }
+    case 'openai':
+      // OpenAI uses a different SDK — keep using the provider path
+      return null
+    case 'stub':
+      return null
+    default:
+      return null
+  }
+}
+
 // Late-bound event broadcaster — wired after IPC registration
 let broadcast: ((projectId: ProjectId, event: AgentSessionEvent) => void) | undefined
 
@@ -100,12 +133,20 @@ app.whenReady().then(async () => {
     providerConfig = resolveProviderConfigFromEnv()
   }
 
-  const provider = createProvider(providerConfig)
+  // Create a Vesper bridge when a compatible real LLM provider is configured
+  let bridge: ReturnType<typeof createVesperBridge> | undefined
+  if (providerConfig.provider !== 'stub') {
+    const bridgeConfig = resolveBridgeConfig(providerConfig)
+    if (bridgeConfig) {
+      bridge = createVesperBridge(bridgeConfig, toolHandler)
+    }
+  }
 
   const sessionManager = createAgentSessionManager({
     sessionStore,
     projectStore,
-    provider,
+    provider: bridge ? undefined : createProvider(providerConfig),
+    bridge,
     toolHandler,
     onEvent: (projectId, event) => broadcast?.(projectId, event),
   })

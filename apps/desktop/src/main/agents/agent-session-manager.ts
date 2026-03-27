@@ -5,11 +5,13 @@ import type {
   AgentSessionEvent,
   AgentSessionStatus,
   AgentTurnResult,
+  ExecutionLogEntry,
 } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
 import type { PascalAgentProvider, PascalToolCallHandler } from './agent-provider'
 import type { createAgentSessionStore } from './agent-session-store'
 import type { createProjectStore } from '../projects/project-store'
+import type { createVesperBridge } from './vesper-bridge'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,6 +19,7 @@ import type { createProjectStore } from '../projects/project-store'
 
 type SessionStore = ReturnType<typeof createAgentSessionStore>
 type ProjectStore = ReturnType<typeof createProjectStore>
+type VesperBridge = ReturnType<typeof createVesperBridge>
 
 // ---------------------------------------------------------------------------
 // Session manager
@@ -25,11 +28,16 @@ type ProjectStore = ReturnType<typeof createProjectStore>
 export function createAgentSessionManager(deps: {
   sessionStore: SessionStore
   projectStore: ProjectStore
-  provider: PascalAgentProvider
+  provider?: PascalAgentProvider
+  bridge?: VesperBridge
   toolHandler: PascalToolCallHandler
   onEvent?: (projectId: ProjectId, event: AgentSessionEvent) => void
 }) {
-  const { sessionStore, projectStore, provider, toolHandler, onEvent } = deps
+  const { sessionStore, projectStore, provider, bridge, toolHandler, onEvent } = deps
+
+  if (!bridge && !provider) {
+    throw new Error('Either bridge or provider must be provided')
+  }
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -82,6 +90,123 @@ export function createAgentSessionManager(deps: {
   }
 
   // ---------------------------------------------------------------------------
+  // Bridge path — uses Vesper bridge async generator for streaming turns
+  // ---------------------------------------------------------------------------
+
+  async function sendMessageViaBridge(
+    bridgeRef: VesperBridge,
+    projectId: ProjectId,
+    prompt: string,
+    project: { scene: unknown },
+    session: AgentSession,
+    selectionContext?: { selectedNodeIds: string[]; selectedNodeTypes: string[] },
+  ): Promise<AgentTurnResult> {
+    let responseText = ''
+    const executionLog: ExecutionLogEntry[] = []
+    const affectedNodeIds: string[] = []
+
+    for await (const event of bridgeRef.chat(prompt, {
+      projectId,
+      sceneContext: project.scene,
+      selectionContext,
+    })) {
+      switch (event.type) {
+        case 'status':
+          emit(projectId, { type: 'status-changed', status: 'applying' })
+          break
+        case 'text_delta':
+          responseText += event.text
+          break
+        case 'text_complete':
+          responseText = event.text
+          break
+        case 'tool_start': {
+          const entry: ExecutionLogEntry = {
+            type: 'tool-call',
+            tool: event.toolName,
+            args: event.input,
+            timestamp: new Date().toISOString(),
+          }
+          executionLog.push(entry)
+          emit(projectId, { type: 'execution-log', entry })
+          // Track affected nodes from scene_applyCommands input
+          if (event.toolName === 'scene_applyCommands') {
+            const commands = (event.input.commands ?? []) as Array<Record<string, unknown>>
+            for (const cmd of commands) {
+              if (cmd.type === 'create-node' && cmd.node) {
+                const node = cmd.node as Record<string, unknown>
+                if (typeof node.id === 'string') affectedNodeIds.push(node.id)
+              }
+              if (cmd.type === 'update-node' && typeof cmd.nodeId === 'string') affectedNodeIds.push(cmd.nodeId)
+              if (cmd.type === 'move-node' && typeof cmd.nodeId === 'string') affectedNodeIds.push(cmd.nodeId)
+              if (cmd.type === 'delete-node' && typeof cmd.nodeId === 'string') affectedNodeIds.push(cmd.nodeId)
+            }
+          }
+          break
+        }
+        case 'tool_result':
+          executionLog.push({
+            type: 'tool-result',
+            tool: 'unknown', // bridge doesn't repeat the tool name in results
+            result: event.result,
+            timestamp: new Date().toISOString(),
+          })
+          break
+        case 'error':
+          throw new Error(event.message)
+        case 'complete':
+          // Final event — generator is done
+          break
+      }
+    }
+
+    // Build turn result
+    const sceneCommandsApplied = executionLog.filter(
+      (e) => e.type === 'tool-call' && e.tool === 'scene_applyCommands',
+    ).length
+
+    return {
+      status: 'completed',
+      summary: responseText || 'Done.',
+      executionLog,
+      sceneCommandsApplied,
+      affectedNodeIds,
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Provider path — uses the legacy PascalAgentProvider.runTurn()
+  // ---------------------------------------------------------------------------
+
+  async function sendMessageViaProvider(
+    providerRef: PascalAgentProvider,
+    projectId: ProjectId,
+    prompt: string,
+    project: { scene: unknown },
+    session: AgentSession,
+    selectionContext?: { selectedNodeIds: string[]; selectedNodeTypes: string[] },
+  ): Promise<AgentTurnResult> {
+    const tracking = createTrackingToolHandler(toolHandler)
+
+    const turnOutput = await providerRef.runTurn({
+      projectId,
+      prompt,
+      sceneContext: project.scene,
+      messageHistory: session.messages,
+      tools: tracking.handler,
+      selectionContext,
+    })
+
+    return {
+      status: 'completed',
+      summary: turnOutput.response,
+      executionLog: [],
+      sceneCommandsApplied: turnOutput.toolCallsExecuted,
+      affectedNodeIds: tracking.getAffectedNodeIds(),
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
 
@@ -126,26 +251,15 @@ export function createAgentSessionManager(deps: {
         }
       }
 
-      // 8. Create tracking tool handler to capture affected node IDs
-      const tracking = createTrackingToolHandler(toolHandler)
+      // 8. Run the turn — bridge path or provider path
+      let turnResult: AgentTurnResult
 
-      // 9. Run the provider turn — provider handles LLM + tool-use loop
-      const turnOutput = await provider.runTurn({
-        projectId,
-        prompt,
-        sceneContext: project.scene,
-        messageHistory: session.messages,
-        tools: tracking.handler,
-        selectionContext,
-      })
-
-      // 10. Build AgentTurnResult
-      const turnResult: AgentTurnResult = {
-        status: 'completed',
-        summary: turnOutput.response,
-        executionLog: [],
-        sceneCommandsApplied: turnOutput.toolCallsExecuted,
-        affectedNodeIds: tracking.getAffectedNodeIds(),
+      if (bridge) {
+        turnResult = await sendMessageViaBridge(bridge, projectId, prompt, project, session, selectionContext)
+      } else if (provider) {
+        turnResult = await sendMessageViaProvider(provider, projectId, prompt, project, session, selectionContext)
+      } else {
+        throw new Error('Either bridge or provider must be provided')
       }
 
       // 9. Add agent message with summary

@@ -10,6 +10,7 @@ import { createStubAgentProvider } from './stub-agent-provider'
 import type { PascalAgentProvider, PascalToolCallHandler } from './agent-provider'
 import type { AgentSessionEvent } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
+import type { PascalAgentEvent, createVesperBridge } from './vesper-bridge'
 
 // ---------------------------------------------------------------------------
 // Test helper — wire tool handler to the real project store
@@ -282,6 +283,256 @@ describe('AgentSessionManager integration', () => {
       expect(session.messages[1]!.role).toBe('agent')
       expect(session.lastTurnResult).not.toBeNull()
       expect(session.lastTurnResult!.sceneCommandsApplied).toBeGreaterThan(0)
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Mock bridge helper
+// ---------------------------------------------------------------------------
+
+function createMockBridge(events?: PascalAgentEvent[]): ReturnType<typeof createVesperBridge> {
+  const defaultEvents: PascalAgentEvent[] = [
+    { type: 'status', message: 'Thinking...' },
+    { type: 'tool_start', toolName: 'scene_read', toolUseId: '1', input: { projectId: 'test' } },
+    { type: 'tool_result', toolUseId: '1', result: '{}', isError: false },
+    { type: 'text_complete', text: 'Read the project successfully.' },
+    { type: 'complete', usage: { inputTokens: 100, outputTokens: 50 } },
+  ]
+  const eventsToYield = events ?? defaultEvents
+
+  return {
+    async *chat(_message: string, _options: any): AsyncGenerator<PascalAgentEvent> {
+      for (const event of eventsToYield) {
+        yield event
+      }
+    },
+    resetConversation() {},
+    getHistoryLength() {
+      return 0
+    },
+  } as ReturnType<typeof createVesperBridge>
+}
+
+// ---------------------------------------------------------------------------
+// Bridge integration tests
+// ---------------------------------------------------------------------------
+
+describe('AgentSessionManager bridge integration', () => {
+  test('sendMessage with bridge uses async generator and tracks events', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-bridge-'))
+
+    try {
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
+
+      const events: AgentSessionEvent[] = []
+      const mockBridge = createMockBridge([
+        { type: 'status', message: 'Thinking...' },
+        {
+          type: 'tool_start',
+          toolName: 'scene_applyCommands',
+          toolUseId: 'tu-1',
+          input: {
+            projectId: 'test',
+            commands: [
+              { type: 'create-node', node: { id: 'node-abc', type: 'wall' } },
+              { type: 'update-node', nodeId: 'node-xyz' },
+            ],
+          },
+        },
+        { type: 'tool_result', toolUseId: 'tu-1', result: '{"status":"ok"}', isError: false },
+        { type: 'text_complete', text: 'I created a wall and updated a node.' },
+        { type: 'complete', usage: { inputTokens: 200, outputTokens: 100 } },
+      ])
+
+      const manager = createAgentSessionManager({
+        sessionStore,
+        projectStore,
+        bridge: mockBridge,
+        toolHandler,
+        onEvent: (_projectId, event) => {
+          events.push(event)
+        },
+      })
+
+      const project = await projectStore.createProject({ name: 'Bridge Test' })
+      const result = await manager.sendMessage(project.projectId, 'Create a wall')
+
+      // Verify the turn result
+      expect(result.status).toBe('completed')
+      expect(result.summary).toBe('I created a wall and updated a node.')
+      expect(result.affectedNodeIds).toContain('node-abc')
+      expect(result.affectedNodeIds).toContain('node-xyz')
+      expect(result.sceneCommandsApplied).toBe(1)
+      expect(result.executionLog.length).toBe(2) // 1 tool-call + 1 tool-result
+
+      // Verify execution log entries
+      const toolCallEntries = result.executionLog.filter((e) => e.type === 'tool-call')
+      expect(toolCallEntries.length).toBe(1)
+      expect(toolCallEntries[0]!.tool).toBe('scene_applyCommands')
+
+      const toolResultEntries = result.executionLog.filter((e) => e.type === 'tool-result')
+      expect(toolResultEntries.length).toBe(1)
+
+      // Verify events were emitted
+      const statusEvents = events
+        .filter((e): e is Extract<AgentSessionEvent, { type: 'status-changed' }> => e.type === 'status-changed')
+        .map((e) => e.status)
+      expect(statusEvents).toContain('reading')
+      expect(statusEvents).toContain('applying')
+      expect(statusEvents).toContain('completed')
+
+      const executionLogEvents = events.filter((e) => e.type === 'execution-log')
+      expect(executionLogEvents.length).toBe(1) // one tool_start event
+
+      const turnCompletedEvents = events.filter((e) => e.type === 'turn-completed')
+      expect(turnCompletedEvents.length).toBe(1)
+
+      // Verify session persistence
+      const session = await manager.getSession(project.projectId)
+      expect(session.status).toBe('completed')
+      expect(session.messages.length).toBe(2)
+      expect(session.messages[0]!.role).toBe('user')
+      expect(session.messages[1]!.role).toBe('agent')
+      expect(session.lastTurnResult).not.toBeNull()
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+
+  test('sendMessage with bridge handles error events', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-bridge-err-'))
+
+    try {
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
+
+      const mockBridge = createMockBridge([
+        { type: 'status', message: 'Thinking...' },
+        { type: 'error', message: 'API rate limit exceeded' },
+      ])
+
+      const manager = createAgentSessionManager({
+        sessionStore,
+        projectStore,
+        bridge: mockBridge,
+        toolHandler,
+      })
+
+      const project = await projectStore.createProject({ name: 'Bridge Error Test' })
+      const result = await manager.sendMessage(project.projectId, 'Do something')
+
+      expect(result.status).toBe('error')
+      expect(result.error).toBe('API rate limit exceeded')
+
+      const session = await manager.getSession(project.projectId)
+      expect(session.status).toBe('error')
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+
+  test('sendMessage with bridge accumulates text deltas', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-bridge-delta-'))
+
+    try {
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
+
+      const mockBridge = createMockBridge([
+        { type: 'status', message: 'Thinking...' },
+        { type: 'text_delta', text: 'Hello ' },
+        { type: 'text_delta', text: 'world' },
+        { type: 'text_complete', text: 'Hello world' },
+        { type: 'complete', usage: { inputTokens: 50, outputTokens: 20 } },
+      ])
+
+      const manager = createAgentSessionManager({
+        sessionStore,
+        projectStore,
+        bridge: mockBridge,
+        toolHandler,
+      })
+
+      const project = await projectStore.createProject({ name: 'Delta Test' })
+      const result = await manager.sendMessage(project.projectId, 'Say hello')
+
+      // text_complete overwrites accumulated deltas
+      expect(result.summary).toBe('Hello world')
+      expect(result.status).toBe('completed')
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+
+  test('sendMessage falls back to provider when bridge is undefined', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-fallback-'))
+
+    try {
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
+
+      // No bridge, just provider — same as the legacy path
+      const manager = createAgentSessionManager({
+        sessionStore,
+        projectStore,
+        provider: minimalProvider,
+        toolHandler,
+      })
+
+      const project = await projectStore.createProject({ name: 'Fallback Test' })
+      const result = await manager.sendMessage(project.projectId, 'Read the project')
+
+      expect(result.status).toBe('completed')
+      expect(result.summary).toContain('Fallback Test')
+      expect(typeof result.sceneCommandsApplied).toBe('number')
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+
+  test('bridge path takes precedence over provider when both are supplied', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-precedence-'))
+
+    try {
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
+
+      const providerCalled = { value: false }
+      const spyProvider: PascalAgentProvider = {
+        name: 'spy-provider',
+        async runTurn() {
+          providerCalled.value = true
+          return { response: 'from provider', toolCallsExecuted: 0 }
+        },
+      }
+
+      const mockBridge = createMockBridge([
+        { type: 'text_complete', text: 'from bridge' },
+        { type: 'complete' },
+      ])
+
+      const manager = createAgentSessionManager({
+        sessionStore,
+        projectStore,
+        provider: spyProvider,
+        bridge: mockBridge,
+        toolHandler,
+      })
+
+      const project = await projectStore.createProject({ name: 'Precedence Test' })
+      const result = await manager.sendMessage(project.projectId, 'test')
+
+      expect(result.summary).toBe('from bridge')
+      expect(providerCalled.value).toBe(false)
     } finally {
       await rm(rootDir, { force: true, recursive: true })
     }
