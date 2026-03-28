@@ -12,6 +12,8 @@
  * 5. Routes Pascal scene tools through the tool call handler
  */
 
+import type { ThinkingLevel } from '../../shared/agents'
+import { getThinkingBudgetTokens } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
 import type { PascalToolCallHandler } from './agent-provider'
 
@@ -54,6 +56,8 @@ export type ChatTurnOptions = {
     selectedNodeIds: string[]
     selectedNodeTypes: string[]
   }
+  model?: string
+  thinkingLevel?: ThinkingLevel
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +84,11 @@ export function createVesperBridge(
       message: string,
       options: ChatTurnOptions,
     ): AsyncGenerator<PascalAgentEvent> {
+      // Use per-turn model override, fall back to bridge default
+      const turnModel = options.model ?? model
+      const thinkingLevel = options.thinkingLevel ?? 'think'
+      const thinkingTokens = getThinkingBudgetTokens(thinkingLevel)
+
       const Anthropic = (await import('@anthropic-ai/sdk')).default
       const client = new Anthropic({
         apiKey: config.apiKey,
@@ -144,13 +153,16 @@ export function createVesperBridge(
         let response: Awaited<ReturnType<typeof client.messages.create>>
         try {
           response = await client.messages.create({
-            model,
-            max_tokens: maxTokens,
+            model: turnModel,
+            max_tokens: maxTokens + thinkingTokens,
             system: systemPrompt,
             messages: messages as Parameters<
               typeof client.messages.create
             >[0]['messages'],
             tools,
+            ...(thinkingTokens > 0 ? {
+              thinking: { type: 'enabled' as const, budget_tokens: thinkingTokens }
+            } : {}),
           })
         } catch (err) {
           const errMsg =
@@ -160,11 +172,12 @@ export function createVesperBridge(
           return
         }
 
+        // Filter out thinking blocks — only show text and tool_use to the user
         const textBlocks = response.content.filter(
-          (b) => b.type === 'text',
+          (b: any) => b.type === 'text',
         ) as Array<{ type: 'text'; text: string }>
         const toolUseBlocks = response.content.filter(
-          (b) => b.type === 'tool_use',
+          (b: any) => b.type === 'tool_use',
         ) as Array<{
           type: 'tool_use'
           id: string

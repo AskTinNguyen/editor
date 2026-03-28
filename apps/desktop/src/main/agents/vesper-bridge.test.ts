@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { AVAILABLE_MODELS, THINKING_LEVELS, getThinkingBudgetTokens } from '../../shared/agents'
 import type { PascalToolCallHandler } from './agent-provider'
 import { createVesperBridge } from './vesper-bridge'
 
@@ -52,6 +53,35 @@ describe('VesperBridge', () => {
     expect(typeof gen.return).toBe('function')
     expect(typeof gen.throw).toBe('function')
   })
+
+  test('chat options accept model and thinkingLevel', () => {
+    const bridge = createVesperBridge(
+      { apiKey: 'test-key' },
+      makeMockToolHandler(),
+    )
+    // Verify the bridge accepts model + thinkingLevel options without error
+    const gen = bridge.chat('hello', {
+      projectId: 'project_test123',
+      sceneContext: { nodes: {}, rootNodeIds: [] },
+      model: 'claude-opus-4-6',
+      thinkingLevel: 'max',
+    })
+    expect(typeof gen.next).toBe('function')
+    expect(bridge.getHistoryLength()).toBe(0)
+  })
+
+  test('chat options accept thinkingLevel off', () => {
+    const bridge = createVesperBridge(
+      { apiKey: 'test-key' },
+      makeMockToolHandler(),
+    )
+    const gen = bridge.chat('hello', {
+      projectId: 'project_test123',
+      sceneContext: { nodes: {}, rootNodeIds: [] },
+      thinkingLevel: 'off',
+    })
+    expect(typeof gen.next).toBe('function')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -90,5 +120,43 @@ describe('PASCAL_TOOLS', () => {
       'projectId',
       'commands',
     ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Model & Thinking types
+// ---------------------------------------------------------------------------
+
+describe('Model selection types', () => {
+  test('AVAILABLE_MODELS includes at least 3 Claude models', () => {
+    expect(AVAILABLE_MODELS.length).toBeGreaterThanOrEqual(3)
+    const claudeModels = AVAILABLE_MODELS.filter((m) => m.family === 'claude')
+    expect(claudeModels.length).toBeGreaterThanOrEqual(3)
+  })
+
+  test('all models have required fields', () => {
+    for (const model of AVAILABLE_MODELS) {
+      expect(model.id).toBeDefined()
+      expect(model.name).toBeDefined()
+      expect(model.family).toBeDefined()
+      expect(model.contextWindow).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('Thinking levels', () => {
+  test('THINKING_LEVELS has 3 levels', () => {
+    expect(THINKING_LEVELS.length).toBe(3)
+    expect(THINKING_LEVELS.map((t) => t.id)).toEqual(['off', 'think', 'max'])
+  })
+
+  test('getThinkingBudgetTokens returns correct values', () => {
+    expect(getThinkingBudgetTokens('off')).toBe(0)
+    expect(getThinkingBudgetTokens('think')).toBe(4000)
+    expect(getThinkingBudgetTokens('max')).toBe(16000)
+  })
+
+  test('getThinkingBudgetTokens returns 0 for unknown level', () => {
+    expect(getThinkingBudgetTokens('unknown' as any)).toBe(0)
   })
 })

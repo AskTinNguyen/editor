@@ -18,6 +18,8 @@ function createEmptySession(projectId: ProjectId): AgentSession {
     status: 'idle',
     messages: [],
     lastTurnResult: null,
+    model: 'claude-sonnet-4-6',
+    thinkingLevel: 'think',
     createdAt: now,
     updatedAt: now,
   }

@@ -100,7 +100,7 @@ export function useAgentSession(projectId: ProjectId | null) {
   const sendMessage = useCallback(
     async (
       prompt: string,
-      options?: { selectedNodeIds?: string[] },
+      options?: { selectedNodeIds?: string[]; model?: string; thinkingLevel?: import('../../../shared/agents').ThinkingLevel },
     ): Promise<AgentTurnResult | null> => {
       const pid = projectIdRef.current
       if (!pid) return null

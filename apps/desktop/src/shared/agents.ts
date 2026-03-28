@@ -53,6 +53,48 @@ export type AgentTurnResult = {
 }
 
 // ---------------------------------------------------------------------------
+// Model selection
+// ---------------------------------------------------------------------------
+
+export type ModelFamily = 'claude' | 'openai' | 'kimi'
+
+export type ModelDefinition = {
+  id: string
+  name: string
+  family: ModelFamily
+  contextWindow: number
+}
+
+export const AVAILABLE_MODELS: ModelDefinition[] = [
+  { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', family: 'claude', contextWindow: 200000 },
+  { id: 'claude-opus-4-6', name: 'Opus 4.6', family: 'claude', contextWindow: 200000 },
+  { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', family: 'claude', contextWindow: 200000 },
+]
+
+// ---------------------------------------------------------------------------
+// Thinking levels
+// ---------------------------------------------------------------------------
+
+export type ThinkingLevel = 'off' | 'think' | 'max'
+
+export type ThinkingLevelDefinition = {
+  id: ThinkingLevel
+  name: string
+  description: string
+  budgetTokens: number
+}
+
+export const THINKING_LEVELS: ThinkingLevelDefinition[] = [
+  { id: 'off', name: 'No Thinking', description: 'Fastest responses', budgetTokens: 0 },
+  { id: 'think', name: 'Thinking', description: 'Balanced reasoning', budgetTokens: 4000 },
+  { id: 'max', name: 'Max Thinking', description: 'Deepest reasoning', budgetTokens: 16000 },
+]
+
+export function getThinkingBudgetTokens(level: ThinkingLevel): number {
+  return THINKING_LEVELS.find(t => t.id === level)?.budgetTokens ?? 0
+}
+
+// ---------------------------------------------------------------------------
 // Agent session (persisted per project)
 // ---------------------------------------------------------------------------
 
@@ -62,6 +104,8 @@ export type AgentSession = {
   status: AgentSessionStatus
   messages: AgentMessage[]
   lastTurnResult: AgentTurnResult | null
+  model: string
+  thinkingLevel: ThinkingLevel
   createdAt: string
   updatedAt: string
 }
@@ -92,6 +136,12 @@ export const PROVIDER_CONFIG_IPC_CHANNELS = {
   get: 'provider-config:get',
   set: 'provider-config:set',
   test: 'provider-config:test',
+} as const
+
+export const MODEL_IPC_CHANNELS = {
+  getModels: 'models:list',
+  setSessionModel: 'session:set-model',
+  setSessionThinking: 'session:set-thinking',
 } as const
 
 // ---------------------------------------------------------------------------
@@ -132,7 +182,11 @@ export type PascalDesktopAgentsApi = {
   sendMessage(
     projectId: ProjectId,
     prompt: string,
-    options?: { selectedNodeIds?: string[] },
+    options?: {
+      selectedNodeIds?: string[]
+      model?: string
+      thinkingLevel?: ThinkingLevel
+    },
   ): Promise<AgentTurnResult>
   subscribe(projectId: ProjectId, listener: (event: AgentSessionEvent) => void): () => void
   getProviderConfig(): Promise<PersistedProviderConfig>

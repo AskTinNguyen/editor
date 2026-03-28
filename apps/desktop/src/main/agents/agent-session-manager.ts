@@ -6,6 +6,7 @@ import type {
   AgentSessionStatus,
   AgentTurnResult,
   ExecutionLogEntry,
+  ThinkingLevel,
 } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
 import type { PascalAgentProvider, PascalToolCallHandler } from './agent-provider'
@@ -100,6 +101,7 @@ export function createAgentSessionManager(deps: {
     project: { scene: unknown },
     session: AgentSession,
     selectionContext?: { selectedNodeIds: string[]; selectedNodeTypes: string[] },
+    options?: { model?: string; thinkingLevel?: ThinkingLevel },
   ): Promise<AgentTurnResult> {
     let responseText = ''
     const executionLog: ExecutionLogEntry[] = []
@@ -109,6 +111,8 @@ export function createAgentSessionManager(deps: {
       projectId,
       sceneContext: project.scene,
       selectionContext,
+      model: options?.model,
+      thinkingLevel: options?.thinkingLevel,
     })) {
       switch (event.type) {
         case 'status':
@@ -217,7 +221,7 @@ export function createAgentSessionManager(deps: {
   async function sendMessage(
     projectId: ProjectId,
     prompt: string,
-    options?: { selectedNodeIds?: string[] },
+    options?: { selectedNodeIds?: string[]; model?: string; thinkingLevel?: ThinkingLevel },
   ): Promise<AgentTurnResult> {
     // 1. Load session
     const session = await sessionStore.getSession(projectId)
@@ -255,7 +259,10 @@ export function createAgentSessionManager(deps: {
       let turnResult: AgentTurnResult
 
       if (bridge) {
-        turnResult = await sendMessageViaBridge(bridge, projectId, prompt, project, session, selectionContext)
+        turnResult = await sendMessageViaBridge(bridge, projectId, prompt, project, session, selectionContext, {
+          model: options?.model,
+          thinkingLevel: options?.thinkingLevel,
+        })
       } else if (provider) {
         turnResult = await sendMessageViaProvider(provider, projectId, prompt, project, session, selectionContext)
       } else {
@@ -267,11 +274,15 @@ export function createAgentSessionManager(deps: {
       session.messages.push(agentMessage)
       emit(projectId, { type: 'message-added', message: agentMessage })
 
-      // 10. Set status to 'completed'
+      // 10. Persist model + thinking level used for this turn
+      session.model = options?.model ?? session.model ?? 'claude-sonnet-4-6'
+      session.thinkingLevel = options?.thinkingLevel ?? session.thinkingLevel ?? 'think'
+
+      // 11. Set status to 'completed'
       session.lastTurnResult = turnResult
       await setStatus(session, 'completed')
 
-      // 11. Save session, emit turn-completed
+      // 12. Save session, emit turn-completed
       await sessionStore.saveSession(session)
       emit(projectId, { type: 'turn-completed', result: turnResult })
 
