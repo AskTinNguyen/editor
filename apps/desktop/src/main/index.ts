@@ -124,13 +124,17 @@ function resolveBridgeConfig(config: ProviderConfig): VesperBridgeConfig | null 
 let broadcast: ((projectId: ProjectId, event: AgentSessionEvent) => void) | undefined
 
 app.whenReady().then(async () => {
-  // Load persisted provider config; fall back to env-var resolution
+  // Provider selection priority: env var > persisted config > stub default
   let providerConfig: ProviderConfig
-  try {
-    const persisted = await loadProviderConfig(rootDir)
-    providerConfig = resolveProviderFromConfig(persisted)
-  } catch {
+  if (process.env.PASCAL_AGENT_PROVIDER && process.env.PASCAL_AGENT_PROVIDER !== 'stub') {
     providerConfig = resolveProviderConfigFromEnv()
+  } else {
+    try {
+      const persisted = await loadProviderConfig(rootDir)
+      providerConfig = resolveProviderFromConfig(persisted)
+    } catch {
+      providerConfig = resolveProviderConfigFromEnv()
+    }
   }
 
   // Create a Vesper bridge when a compatible real LLM provider is configured
