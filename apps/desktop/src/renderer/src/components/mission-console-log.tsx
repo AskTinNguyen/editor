@@ -149,7 +149,7 @@ export function MissionConsoleLog({
   }
 
   return (
-    <div ref={scrollRef} className="max-h-48 flex-1 overflow-y-auto py-1">
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-1">
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />
       ))}

@@ -18,13 +18,13 @@ export const AVAILABLE_MODELS: ModelDefinition[] = [
 ]
 
 export const THINKING_LEVELS = [
-  { id: 'off' as const, name: 'No Thinking', icon: '⚡' },
-  { id: 'think' as const, name: 'Thinking', icon: '💭' },
-  { id: 'max' as const, name: 'Max Thinking', icon: '🧠' },
+  { id: 'off' as const, label: 'Off' },
+  { id: 'think' as const, label: 'Think' },
+  { id: 'max' as const, label: 'Max' },
 ]
 
 // ---------------------------------------------------------------------------
-// MissionConsoleControls — compact model + thinking selector bar
+// MissionConsoleControls — model + thinking selector bar
 // ---------------------------------------------------------------------------
 
 export function MissionConsoleControls({
@@ -39,37 +39,42 @@ export function MissionConsoleControls({
   onThinkingLevelChange: (level: ThinkingLevel) => void
 }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-1 border-t border-border/30">
+    <div className="flex items-center gap-3 border-t border-border/40 bg-card/80 px-3 py-1.5">
       {/* Model selector */}
-      <select
-        value={model}
-        onChange={(e) => onModelChange(e.target.value)}
-        className="h-6 rounded border border-border/40 bg-background/50 px-1.5 text-[11px] text-foreground/70 focus:border-blue-500/50 focus:outline-none"
-      >
-        {AVAILABLE_MODELS.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.name}
-          </option>
-        ))}
-      </select>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] font-medium text-foreground/50">Model</span>
+        <select
+          value={model}
+          onChange={(e) => onModelChange(e.target.value)}
+          className="h-7 rounded-md border border-border/50 bg-background px-2 text-xs text-foreground focus:border-blue-500/50 focus:outline-none"
+        >
+          {AVAILABLE_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {/* Thinking level toggle — segmented control */}
-      <div className="flex items-center gap-0.5">
-        {THINKING_LEVELS.map((level) => (
-          <button
-            key={level.id}
-            type="button"
-            className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
-              thinkingLevel === level.id
-                ? 'bg-blue-600/20 text-blue-400 font-medium'
-                : 'text-foreground/40 hover:text-foreground/60'
-            }`}
-            onClick={() => onThinkingLevelChange(level.id)}
-            title={level.name}
-          >
-            {level.name}
-          </button>
-        ))}
+      {/* Thinking level toggle */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] font-medium text-foreground/50">Thinking</span>
+        <div className="flex rounded-md border border-border/50 bg-background">
+          {THINKING_LEVELS.map((level) => (
+            <button
+              key={level.id}
+              type="button"
+              className={`px-2.5 py-1 text-xs transition-colors first:rounded-l-md last:rounded-r-md ${
+                thinkingLevel === level.id
+                  ? 'bg-blue-600 text-white font-medium'
+                  : 'text-foreground/60 hover:bg-accent hover:text-foreground'
+              }`}
+              onClick={() => onThinkingLevelChange(level.id)}
+            >
+              {level.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
