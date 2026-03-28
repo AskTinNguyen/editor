@@ -33,6 +33,7 @@ export default defineConfig({
   },
   renderer: {
     root: join(currentDir, 'src/renderer'),
+    publicDir: join(currentDir, 'src/renderer/public'),
     plugins: [tailwindcss(), react()],
     build: {
       outDir: '../../dist/renderer',
