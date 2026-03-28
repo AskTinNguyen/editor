@@ -1,6 +1,7 @@
 import type { PersistedProviderConfig } from '../main/agents/providers/provider-config'
 import type { ProjectId } from './projects'
 import type { SceneCommand, SceneCommandBatchResult, SceneCommandResult } from '@pascal/scene-engine'
+import type { UiInspectorAttachment } from './ui-inspector'
 
 // ---------------------------------------------------------------------------
 // Agent session identity
@@ -186,6 +187,8 @@ export type PascalDesktopAgentsApi = {
       selectedNodeIds?: string[]
       model?: string
       thinkingLevel?: ThinkingLevel
+      agentContextPrefix?: string
+      uiInspectorAttachment?: UiInspectorAttachment
     },
   ): Promise<AgentTurnResult>
   subscribe(projectId: ProjectId, listener: (event: AgentSessionEvent) => void): () => void

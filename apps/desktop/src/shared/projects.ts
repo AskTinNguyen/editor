@@ -53,9 +53,11 @@ export type PascalDesktopProjectsApi = {
 }
 
 export type { PascalDesktopAgentsApi } from './agents'
+export type { PascalDesktopUiInspectorApi } from './ui-inspector'
 
 export type PascalDesktopApi = {
   // The trusted main process owns the projectId -> projectFilePath mapping.
   projects: PascalDesktopProjectsApi
   agents: import('./agents').PascalDesktopAgentsApi
+  uiInspector?: import('./ui-inspector').PascalDesktopUiInspectorApi
 }
