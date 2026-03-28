@@ -13,11 +13,14 @@ import { createProvider, type ProviderConfig } from './agents/providers'
 import { loadProviderConfig, resolveProviderFromConfig } from './agents/providers/provider-config'
 import { createVesperBridge, type VesperBridgeConfig } from './agents/vesper-bridge'
 import { getAiGatewayCredentials } from './agents/providers/ai-gateway-credentials'
+import { registerUiInspectorIpc } from './ui-inspector/ipc-ui-inspector'
+import { createUiInspectorService } from './ui-inspector/ui-inspector-service'
 
 const rootDir = join(app.getPath('userData'), 'projects')
 
 const projectStore = createProjectStore({ rootDir })
 const sessionStore = createAgentSessionStore({ rootDir })
+const uiInspectorService = createUiInspectorService()
 
 // Tool handler — host-owned callbacks that route to trusted desktop APIs
 const toolHandler = {
@@ -158,6 +161,7 @@ app.whenReady().then(async () => {
   registerProjectIpc(projectStore)
   const agentIpc = registerAgentIpc(sessionManager, { rootDir, toolHandler })
   broadcast = agentIpc.broadcastEvent
+  registerUiInspectorIpc(uiInspectorService)
   createMainWindow()
 
   app.on('activate', () => {

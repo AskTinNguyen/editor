@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { AGENT_IPC_CHANNELS, PROVIDER_CONFIG_IPC_CHANNELS } from '../shared/agents'
 import type { PascalDesktopApi } from '../shared/projects'
+import { UI_INSPECTOR_IPC_CHANNELS } from '../shared/ui-inspector'
 
 const pascalDesktopApi: PascalDesktopApi = {
   projects: {
@@ -43,6 +44,47 @@ const pascalDesktopApi: PascalDesktopApi = {
       ipcRenderer.invoke(PROVIDER_CONFIG_IPC_CHANNELS.set, config),
     testProviderConnection: (config) =>
       ipcRenderer.invoke(PROVIDER_CONFIG_IPC_CHANNELS.test, config),
+  },
+  uiInspector: {
+    getState: (projectId) =>
+      ipcRenderer.invoke(UI_INSPECTOR_IPC_CHANNELS.getState, { projectId }),
+    setMode: (projectId, mode) =>
+      ipcRenderer.invoke(UI_INSPECTOR_IPC_CHANNELS.setMode, { projectId, mode }),
+    setSnapshot: (projectId, snapshot) =>
+      ipcRenderer.invoke(UI_INSPECTOR_IPC_CHANNELS.setSnapshot, { projectId, snapshot }),
+    clear: (projectId) =>
+      ipcRenderer.invoke(UI_INSPECTOR_IPC_CHANNELS.clear, { projectId }),
+    captureScreenshot: (projectId, bounds, scale, captureContext) =>
+      ipcRenderer.invoke(UI_INSPECTOR_IPC_CHANNELS.captureScreenshot, {
+        projectId,
+        bounds,
+        scale,
+        captureContext,
+      }),
+    sendToChat: (projectId, prompt, options) =>
+      ipcRenderer.invoke(UI_INSPECTOR_IPC_CHANNELS.sendToChat, {
+        projectId,
+        prompt,
+        options,
+      }),
+    subscribe: (projectId, listener) => {
+      ipcRenderer.send(UI_INSPECTOR_IPC_CHANNELS.stateChanged, { projectId })
+
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { projectId: string; state: Parameters<typeof listener>[0] },
+      ) => {
+        if (payload.projectId === projectId) {
+          listener(payload.state)
+        }
+      }
+
+      ipcRenderer.on(UI_INSPECTOR_IPC_CHANNELS.stateChanged, handler)
+
+      return () => {
+        ipcRenderer.removeListener(UI_INSPECTOR_IPC_CHANNELS.stateChanged, handler)
+      }
+    },
   },
 }
 
