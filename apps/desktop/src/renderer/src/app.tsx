@@ -1,5 +1,5 @@
 import { Editor } from '@pascal-app/editor'
-import type { SaveStatus } from '@pascal-app/editor'
+import type { EditorUiInspectorSceneContext, SaveStatus } from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 import type { CreateProjectInput, PascalProjectFile, ProjectId } from '../../shared/projects'
 import { RecentProjectSheet } from './components/recent-project-sheet'
@@ -25,6 +25,8 @@ export function App() {
   const [sceneRevision, setSceneRevision] = useState(0)
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
   const [highlightNodeIds, setHighlightNodeIds] = useState<string[]>([])
+  const [uiInspectorSceneContext, setUiInspectorSceneContext] =
+    useState<EditorUiInspectorSceneContext | null>(null)
 
   // Load the initial project on mount
   useEffect(() => {
@@ -122,6 +124,7 @@ export function App() {
         project={currentProject}
         saveStatus={saveStatus}
         selectedNodeIds={selectedNodeIds}
+        uiInspectorSceneContext={uiInspectorSceneContext}
         onOpenRecents={handleOpenRecents}
         onCreateProject={handleCreateProject}
       >
@@ -141,6 +144,7 @@ export function App() {
           }}
           onSaveStatusChange={setSaveStatus}
           onSelect={setSelectedNodeIds}
+          onUiInspectorSceneContextChange={setUiInspectorSceneContext}
           highlightNodeIds={highlightNodeIds}
           projectId={currentProject.projectId}
         />

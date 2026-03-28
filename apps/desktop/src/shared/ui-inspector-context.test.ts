@@ -43,4 +43,22 @@ describe('ui inspector context', () => {
       'bearer [REDACTED]',
     )
   })
+
+  test('redacts sensitive data attributes while preserving safe ones', () => {
+    const payload = buildUiInspectorContextPayload({
+      source: 'dom',
+      label: 'Tokenized button',
+      selector: '#save',
+      dataAttributes: {
+        'data-token': 'abc123',
+        'data-api-key': 'secret-key',
+        'data-tracking-id': 'cta-save',
+      },
+      bounds: { x: 0, y: 0, width: 100, height: 40 },
+    })
+
+    expect(payload).toContain('"data-token":"[REDACTED]"')
+    expect(payload).toContain('"data-api-key":"[REDACTED]"')
+    expect(payload).toContain('"data-tracking-id":"cta-save"')
+  })
 })

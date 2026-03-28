@@ -24,6 +24,26 @@ function truncateRecord(
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
+function redactRecordValues(
+  value: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!value) return undefined
+
+  const entries = Object.entries(value).map(([key, rawValue]) => {
+    if (!rawValue) {
+      return [key, rawValue] as const
+    }
+
+    if (SENSITIVE_KEY_PATTERN.test(key)) {
+      return [key, '[REDACTED]'] as const
+    }
+
+    return [key, redactInspectorText(rawValue)] as const
+  })
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
 function redactSensitiveQueryParams(value: string): string {
   return value.replace(QUERY_PARAM_PATTERN, (match, prefix: string, key: string, rawValue: string) => {
     if (!SENSITIVE_KEY_PATTERN.test(key)) {
@@ -99,7 +119,7 @@ export function buildUiInspectorContextPayload(
 
   const styles = truncateRecord(snapshot.styles, UI_INSPECTOR_CAPS.contextMaxStyleKeys)
   const dataAttributes = truncateRecord(
-    snapshot.dataAttributes,
+    redactRecordValues(snapshot.dataAttributes),
     UI_INSPECTOR_CAPS.contextMaxDataAttrKeys,
   )
 

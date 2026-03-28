@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react'
+import { buildUiInspectorContextPayload } from '../../../shared/ui-inspector-context'
+import type { UiInspectorSnapshot } from '../../../shared/ui-inspector'
 import type { ProjectId } from '../../../shared/projects'
 import { useAgentSession } from '../lib/agent-client'
 import { MissionConsoleComposer } from './mission-console-composer'
@@ -9,9 +11,13 @@ import { MissionConsoleStatus } from './mission-console-status'
 export function MissionConsole({
   projectId,
   selectedNodeIds,
+  uiInspectorSnapshot,
+  onUiInspectorSnapshotSent,
 }: {
   projectId: ProjectId
   selectedNodeIds?: string[]
+  uiInspectorSnapshot?: UiInspectorSnapshot | null
+  onUiInspectorSnapshotSent?: () => void
 }) {
   const { session, status, sendMessage, isProcessing } = useAgentSession(projectId)
   const [model, setModel] = useState('claude-sonnet-4-6')
@@ -19,9 +25,38 @@ export function MissionConsole({
 
   const handleSend = useCallback(
     (prompt: string) => {
-      sendMessage(prompt, { selectedNodeIds, model, thinkingLevel })
+      void (async () => {
+        const result = await sendMessage(prompt, {
+          selectedNodeIds,
+          model,
+          thinkingLevel,
+          agentContextPrefix: uiInspectorSnapshot
+            ? buildUiInspectorContextPayload(uiInspectorSnapshot)
+            : undefined,
+          uiInspectorAttachment: uiInspectorSnapshot
+            ? {
+                label: uiInspectorSnapshot.label,
+                source: uiInspectorSnapshot.source,
+                route: uiInspectorSnapshot.route,
+                selector: uiInspectorSnapshot.selector,
+                selectedNodeIds: uiInspectorSnapshot.scene?.selectedNodeIds,
+              }
+            : undefined,
+        })
+
+        if (result && uiInspectorSnapshot) {
+          onUiInspectorSnapshotSent?.()
+        }
+      })
     },
-    [sendMessage, selectedNodeIds, model, thinkingLevel],
+    [
+      model,
+      onUiInspectorSnapshotSent,
+      selectedNodeIds,
+      sendMessage,
+      thinkingLevel,
+      uiInspectorSnapshot,
+    ],
   )
 
   return (
@@ -70,7 +105,20 @@ export function MissionConsole({
 
       {/* Composer — fixed at bottom */}
       <div className="shrink-0">
-        <MissionConsoleComposer onSend={handleSend} disabled={isProcessing} />
+        <MissionConsoleComposer
+          onSend={handleSend}
+          disabled={isProcessing}
+          uiInspectorAttachment={
+            uiInspectorSnapshot
+              ? {
+                  label: uiInspectorSnapshot.label,
+                  source: uiInspectorSnapshot.source,
+                  route: uiInspectorSnapshot.route,
+                }
+              : null
+          }
+          onClearUiInspectorAttachment={onUiInspectorSnapshotSent}
+        />
       </div>
     </div>
   )

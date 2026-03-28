@@ -9,6 +9,7 @@ import {
   type UiInspectorSnapshot,
 } from '../../shared/ui-inspector'
 import type { createUiInspectorService } from './ui-inspector-service'
+import { captureFailedResult, toolUnavailableResult } from './ipc-ui-inspector-errors'
 
 type UiInspectorService = ReturnType<typeof createUiInspectorService>
 
@@ -16,17 +17,6 @@ type TrackedSender = {
   windowId: number
   projectIds: Set<ProjectId>
   unsubscribers: Map<string, () => void>
-}
-
-function permissionBlockedResult<T>(message: string): InspectorResult<T> {
-  return {
-    success: false,
-    error: {
-      code: 'TOOL_UNAVAILABLE',
-      message,
-      retriable: false,
-    },
-  }
 }
 
 export function registerUiInspectorIpc(service: UiInspectorService) {
@@ -129,10 +119,7 @@ export function registerUiInspectorIpc(service: UiInspectorService) {
       try {
         const win = BrowserWindow.fromWebContents(event.sender)
         if (!win) {
-          return {
-            success: false,
-            error: { code: 'NO_WINDOW', message: 'No window found', retriable: false },
-          } satisfies InspectorResult<never>
+          return toolUnavailableResult('No window found')
         }
 
         const image = await win.webContents.capturePage(
@@ -157,14 +144,7 @@ export function registerUiInspectorIpc(service: UiInspectorService) {
           },
         } satisfies InspectorResult<{ screenshotDataUrl: string; screenshotByteSize: number }>
       } catch (err) {
-        return {
-          success: false,
-          error: {
-            code: 'CAPTURE_FAILED',
-            message: err instanceof Error ? err.message : String(err),
-            retriable: true,
-          },
-        } satisfies InspectorResult<never>
+        return captureFailedResult(err)
       }
     },
   )
@@ -174,7 +154,7 @@ export function registerUiInspectorIpc(service: UiInspectorService) {
     (
       _event,
       _payload: { projectId: ProjectId; prompt: string; options?: UiInspectorSendOptions },
-    ) => permissionBlockedResult('Inspector send-to-chat is not implemented yet.'),
+    ) => toolUnavailableResult('Inspector send-to-chat is not implemented yet.'),
   )
 
   ipcMain.on(

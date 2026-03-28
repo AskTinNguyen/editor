@@ -110,7 +110,6 @@ export type UiInspectorSendOptions = {
 
 export type InspectorErrorCode =
   | 'NO_SELECTION'
-  | 'NO_WINDOW'
   | 'CAPTURE_FAILED'
   | 'SEND_FAILED'
   | 'TOOL_UNAVAILABLE'

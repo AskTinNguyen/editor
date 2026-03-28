@@ -16,6 +16,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { initSFXBus } from '../../lib/sfx-bus'
+import type { EditorUiInspectorSceneContext } from '../../lib/ui-inspector-scene-context'
 import useEditor from '../../store/use-editor'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -87,6 +88,7 @@ export interface EditorProps {
   // Agent bridge — selection callback and node highlighting
   onSelect?: (selectedIds: string[]) => void
   highlightNodeIds?: string[]
+  onUiInspectorSceneContextChange?: (context: EditorUiInspectorSceneContext) => void
 }
 
 function EditorSceneCrashFallback() {
@@ -325,6 +327,7 @@ export default function Editor({
   presetsAdapter,
   onSelect,
   highlightNodeIds,
+  onUiInspectorSceneContextChange,
 }: EditorProps) {
   useKeyboard()
 
@@ -342,6 +345,14 @@ export default function Editor({
   )
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFloorplanOpen = useEditor((s) => s.isFloorplanOpen)
+  const phase = useEditor((s) => s.phase)
+  const mode = useEditor((s) => s.mode)
+  const tool = useEditor((s) => s.tool)
+  const viewerSelection = useViewer((state) => state.selection)
+  const hoveredNodeId = useViewer((state) => state.hoveredId)
+  const cameraMode = useViewer((state) => state.cameraMode)
+  const levelMode = useViewer((state) => state.levelMode)
+  const wallMode = useViewer((state) => state.wallMode)
 
   useEffect(() => {
     initializeEditorRuntime()
@@ -420,6 +431,34 @@ export default function Editor({
     })
     return unsubscribe
   }, [onSelect])
+
+  useEffect(() => {
+    if (!onUiInspectorSceneContextChange) return
+
+    onUiInspectorSceneContextChange({
+      selectedBuildingId: viewerSelection.buildingId,
+      selectedLevelId: viewerSelection.levelId,
+      selectedZoneId: viewerSelection.zoneId,
+      selectedNodeIds: viewerSelection.selectedIds,
+      hoveredNodeId,
+      phase,
+      mode,
+      tool,
+      cameraMode,
+      levelMode,
+      wallMode,
+    })
+  }, [
+    cameraMode,
+    hoveredNodeId,
+    levelMode,
+    mode,
+    onUiInspectorSceneContextChange,
+    phase,
+    tool,
+    viewerSelection,
+    wallMode,
+  ])
 
   const showLoader = isLoading || isSceneLoading
   const dismissCameraControlsHint = useCallback(() => {

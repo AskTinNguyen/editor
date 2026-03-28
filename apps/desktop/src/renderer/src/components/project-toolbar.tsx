@@ -7,6 +7,8 @@ export interface ProjectToolbarProps {
   saveStatus: SaveStatus
   onOpenRecents: () => void
   onCreateProject: (input: CreateProjectInput) => void
+  isInspecting?: boolean
+  onToggleInspect?: () => void
 }
 
 const SAVE_STATUS_LABELS: Record<SaveStatus, string> = {
@@ -32,6 +34,8 @@ export function ProjectToolbar({
   saveStatus,
   onOpenRecents,
   onCreateProject,
+  isInspecting = false,
+  onToggleInspect,
 }: ProjectToolbarProps) {
   const [isCreating, setIsCreating] = useState(false)
 
@@ -68,6 +72,18 @@ export function ProjectToolbar({
           onClick={onOpenRecents}
         >
           Open
+        </button>
+        <button
+          type="button"
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+            isInspecting
+              ? 'bg-sky-600 text-white hover:bg-sky-700'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+          }`}
+          data-ui-inspector-chrome="true"
+          onClick={onToggleInspect}
+        >
+          {isInspecting ? 'Inspecting' : 'Inspect'}
         </button>
         <button
           type="button"
