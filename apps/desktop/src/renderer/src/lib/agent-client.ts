@@ -3,10 +3,12 @@ import type {
   AgentSession,
   AgentSessionEvent,
   AgentSessionStatus,
+  ThinkingLevel,
   AgentTurnResult,
   PascalDesktopAgentsApi,
 } from '../../../shared/agents'
 import type { ProjectId } from '../../../shared/projects'
+import type { UiInspectorAttachment } from '../../../shared/ui-inspector'
 
 /**
  * Returns the renderer-side agents API exposed by the preload script.
@@ -100,7 +102,13 @@ export function useAgentSession(projectId: ProjectId | null) {
   const sendMessage = useCallback(
     async (
       prompt: string,
-      options?: { selectedNodeIds?: string[]; model?: string; thinkingLevel?: import('../../../shared/agents').ThinkingLevel },
+      options?: {
+        selectedNodeIds?: string[]
+        model?: string
+        thinkingLevel?: ThinkingLevel
+        agentContextPrefix?: string
+        uiInspectorAttachment?: UiInspectorAttachment
+      },
     ): Promise<AgentTurnResult | null> => {
       const pid = projectIdRef.current
       if (!pid) return null

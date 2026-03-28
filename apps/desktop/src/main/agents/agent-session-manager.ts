@@ -221,7 +221,13 @@ export function createAgentSessionManager(deps: {
   async function sendMessage(
     projectId: ProjectId,
     prompt: string,
-    options?: { selectedNodeIds?: string[]; model?: string; thinkingLevel?: ThinkingLevel },
+    options?: {
+      selectedNodeIds?: string[]
+      model?: string
+      thinkingLevel?: ThinkingLevel
+      agentContextPrefix?: string
+      uiInspectorAttachment?: { label: string; source: 'dom' | 'scene'; route?: string }
+    },
   ): Promise<AgentTurnResult> {
     // 1. Load session
     const session = await sessionStore.getSession(projectId)
@@ -255,16 +261,27 @@ export function createAgentSessionManager(deps: {
         }
       }
 
+      const effectivePrompt = options?.agentContextPrefix
+        ? `${options.agentContextPrefix}\n\n${prompt}`
+        : prompt
+
       // 8. Run the turn — bridge path or provider path
       let turnResult: AgentTurnResult
 
       if (bridge) {
-        turnResult = await sendMessageViaBridge(bridge, projectId, prompt, project, session, selectionContext, {
+        turnResult = await sendMessageViaBridge(bridge, projectId, effectivePrompt, project, session, selectionContext, {
           model: options?.model,
           thinkingLevel: options?.thinkingLevel,
         })
       } else if (provider) {
-        turnResult = await sendMessageViaProvider(provider, projectId, prompt, project, session, selectionContext)
+        turnResult = await sendMessageViaProvider(
+          provider,
+          projectId,
+          effectivePrompt,
+          project,
+          session,
+          selectionContext,
+        )
       } else {
         throw new Error('Either bridge or provider must be provided')
       }

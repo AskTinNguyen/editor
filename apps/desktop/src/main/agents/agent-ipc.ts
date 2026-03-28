@@ -84,7 +84,24 @@ export function registerAgentIpc(
 
   ipcMain.handle(
     AGENT_IPC_CHANNELS.sendMessage,
-    (_event, { projectId, prompt, options }: { projectId: ProjectId; prompt: string; options?: { selectedNodeIds?: string[] } }) =>
+    (
+      _event,
+      {
+        projectId,
+        prompt,
+        options,
+      }: {
+        projectId: ProjectId
+        prompt: string
+        options?: {
+          selectedNodeIds?: string[]
+          model?: string
+          thinkingLevel?: 'off' | 'think' | 'max'
+          agentContextPrefix?: string
+          uiInspectorAttachment?: { label: string; source: 'dom' | 'scene'; route?: string }
+        }
+      },
+    ) =>
       manager.sendMessage(projectId, prompt, options),
   )
 

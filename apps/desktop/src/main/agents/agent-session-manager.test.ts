@@ -164,6 +164,48 @@ describe('AgentSessionManager integration', () => {
     }
   })
 
+  test('sendMessage prefixes the runtime prompt without changing the saved user message', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
+
+    try {
+      const projectStore = createProjectStore({ rootDir })
+      const sessionStore = createAgentSessionStore({ rootDir })
+      const toolHandler = createTestToolHandler(projectStore)
+
+      let capturedPrompt = ''
+      const provider: PascalAgentProvider = {
+        name: 'capture',
+        async runTurn({ prompt }) {
+          capturedPrompt = prompt
+          return {
+            response: 'Done.',
+            toolCallsExecuted: 0,
+          }
+        },
+      }
+
+      const manager = createAgentSessionManager({
+        sessionStore,
+        projectStore,
+        provider,
+        toolHandler,
+      })
+
+      const project = await projectStore.createProject({ name: 'Prefix Test' })
+      await manager.sendMessage(project.projectId, 'Move this panel closer to the canvas', {
+        agentContextPrefix: 'UI_INSPECTOR_CONTEXT\nselector: #panel',
+      })
+
+      expect(capturedPrompt).toContain('UI_INSPECTOR_CONTEXT')
+      expect(capturedPrompt).toContain('Move this panel closer to the canvas')
+
+      const session = await manager.getSession(project.projectId)
+      expect(session.messages[0]?.content).toBe('Move this panel closer to the canvas')
+    } finally {
+      await rm(rootDir, { force: true, recursive: true })
+    }
+  })
+
   test('getSession returns an idle session for a new project', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'pascal-sm-'))
 
