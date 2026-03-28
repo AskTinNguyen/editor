@@ -31,6 +31,34 @@ function createTestToolHandler(
     scene_applyCommands: async (payload: { projectId: ProjectId; commands: any[] }) => {
       return applyProjectSceneCommands(projectStore, payload.projectId, payload.commands)
     },
+    vesper_ui_get_state: async () => ({
+      success: true,
+      data: { mode: 'idle', snapshot: null, updatedAt: null },
+    }),
+    vesper_ui_get_selection: async () => ({
+      success: false,
+      error: {
+        code: 'NO_SELECTION',
+        message: 'No UI selection is currently captured.',
+        retriable: true,
+      },
+    }),
+    vesper_ui_get_context: async () => ({
+      success: false,
+      error: {
+        code: 'NO_SELECTION',
+        message: 'No UI selection is currently captured.',
+        retriable: true,
+      },
+    }),
+    vesper_ui_capture_screenshot: async () => ({
+      success: false,
+      error: {
+        code: 'TOOL_UNAVAILABLE',
+        message: 'UI inspector screenshot capture is not implemented yet.',
+        retriable: false,
+      },
+    }),
   }
 }
 

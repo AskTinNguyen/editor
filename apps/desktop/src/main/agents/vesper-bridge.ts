@@ -52,6 +52,7 @@ export type VesperBridgeConfig = {
 export type ChatTurnOptions = {
   projectId: ProjectId
   sceneContext: unknown
+  windowId?: number
   selectionContext?: {
     selectedNodeIds: string[]
     selectedNodeTypes: string[]
@@ -194,6 +195,68 @@ export function createVesperBridge(
             required: ['projectId', 'commands'],
           },
         },
+        {
+          name: 'vesper_ui_get_state' as const,
+          description: 'Read the current UI inspector state for the active desktop window.',
+          input_schema: {
+            type: 'object' as const,
+            properties: {
+              projectId: {
+                type: 'string',
+                description: 'The project ID to read inspector state for',
+              },
+            },
+            required: ['projectId'],
+          },
+        },
+        {
+          name: 'vesper_ui_get_selection' as const,
+          description:
+            'Read the current inspected UI selection for the active desktop window.',
+          input_schema: {
+            type: 'object' as const,
+            properties: {
+              projectId: {
+                type: 'string',
+                description: 'The project ID to read inspector selection for',
+              },
+            },
+            required: ['projectId'],
+          },
+        },
+        {
+          name: 'vesper_ui_get_context' as const,
+          description:
+            'Build the current UI inspector context payload for the active desktop window.',
+          input_schema: {
+            type: 'object' as const,
+            properties: {
+              projectId: {
+                type: 'string',
+                description: 'The project ID to read inspector context for',
+              },
+              includeHtml: { type: 'boolean' },
+              includeStyles: { type: 'boolean' },
+              includeDataAttributes: { type: 'boolean' },
+            },
+            required: ['projectId'],
+          },
+        },
+        {
+          name: 'vesper_ui_capture_screenshot' as const,
+          description:
+            'Return a screenshot for the current inspected UI selection in the active desktop window.',
+          input_schema: {
+            type: 'object' as const,
+            properties: {
+              projectId: {
+                type: 'string',
+                description: 'The project ID to capture inspector screenshot for',
+              },
+            },
+            required: ['projectId'],
+          },
+        },
       ]
 
       // Add user message to history
@@ -307,6 +370,33 @@ export function createVesperBridge(
                   commands: block.input.commands as Parameters<
                     typeof toolHandler.scene_applyCommands
                   >[0]['commands'],
+                })
+                break
+              case 'vesper_ui_get_state':
+                result = await toolHandler.vesper_ui_get_state({
+                  projectId: block.input.projectId as ProjectId,
+                  windowId: options.windowId,
+                })
+                break
+              case 'vesper_ui_get_selection':
+                result = await toolHandler.vesper_ui_get_selection({
+                  projectId: block.input.projectId as ProjectId,
+                  windowId: options.windowId,
+                })
+                break
+              case 'vesper_ui_get_context':
+                result = await toolHandler.vesper_ui_get_context({
+                  projectId: block.input.projectId as ProjectId,
+                  includeHtml: block.input.includeHtml === true,
+                  includeStyles: block.input.includeStyles === true,
+                  includeDataAttributes: block.input.includeDataAttributes === true,
+                  windowId: options.windowId,
+                })
+                break
+              case 'vesper_ui_capture_screenshot':
+                result = await toolHandler.vesper_ui_capture_screenshot({
+                  projectId: block.input.projectId as ProjectId,
+                  windowId: options.windowId,
                 })
                 break
               default:

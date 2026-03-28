@@ -15,6 +15,7 @@ import { createVesperBridge, type VesperBridgeConfig } from './agents/vesper-bri
 import { getAiGatewayCredentials } from './agents/providers/ai-gateway-credentials'
 import { registerUiInspectorIpc } from './ui-inspector/ipc-ui-inspector'
 import { createUiInspectorService } from './ui-inspector/ui-inspector-service'
+import { buildUiInspectorContextPayload } from '../shared/ui-inspector-context'
 
 const rootDir = join(app.getPath('userData'), 'projects')
 
@@ -42,6 +43,107 @@ const toolHandler = {
       payload.commands,
     )
     return result
+  },
+  vesper_ui_get_state: async (payload: { projectId: ProjectId; windowId?: number }) => {
+    if (!payload.windowId) {
+      return {
+        success: false as const,
+        error: {
+          code: 'TOOL_UNAVAILABLE' as const,
+          message: 'UI inspector state is not available without a window context.',
+          retriable: false,
+        },
+      }
+    }
+
+    return {
+      success: true as const,
+      data: uiInspectorService.getState(
+        uiInspectorService.createScopeKey(payload.projectId, payload.windowId),
+      ),
+    }
+  },
+  vesper_ui_get_selection: async (payload: { projectId: ProjectId; windowId?: number }) => {
+    if (!payload.windowId) {
+      return {
+        success: false as const,
+        error: {
+          code: 'TOOL_UNAVAILABLE' as const,
+          message: 'UI inspector selection is not available without a window context.',
+          retriable: false,
+        },
+      }
+    }
+
+    const state = uiInspectorService.getState(
+      uiInspectorService.createScopeKey(payload.projectId, payload.windowId),
+    )
+    if (!state.snapshot) {
+      return {
+        success: false as const,
+        error: {
+          code: 'NO_SELECTION' as const,
+          message: 'No UI selection is currently captured.',
+          retriable: true,
+        },
+      }
+    }
+
+    return {
+      success: true as const,
+      data: state.snapshot,
+    }
+  },
+  vesper_ui_get_context: async (payload: {
+    projectId: ProjectId
+    windowId?: number
+    includeHtml?: boolean
+    includeStyles?: boolean
+    includeDataAttributes?: boolean
+  }) => {
+    if (!payload.windowId) {
+      return {
+        success: false as const,
+        error: {
+          code: 'TOOL_UNAVAILABLE' as const,
+          message: 'UI inspector context is not available without a window context.',
+          retriable: false,
+        },
+      }
+    }
+
+    const state = uiInspectorService.getState(
+      uiInspectorService.createScopeKey(payload.projectId, payload.windowId),
+    )
+    if (!state.snapshot) {
+      return {
+        success: false as const,
+        error: {
+          code: 'NO_SELECTION' as const,
+          message: 'No UI selection is currently captured.',
+          retriable: true,
+        },
+      }
+    }
+
+    return {
+      success: true as const,
+      data: buildUiInspectorContextPayload(state.snapshot, {
+        includeHtml: payload.includeHtml,
+        includeStyles: payload.includeStyles,
+        includeDataAttributes: payload.includeDataAttributes,
+      }),
+    }
+  },
+  vesper_ui_capture_screenshot: async (_payload: { projectId: ProjectId; windowId?: number }) => {
+    return {
+      success: false as const,
+      error: {
+        code: 'TOOL_UNAVAILABLE' as const,
+        message: 'UI inspector screenshot capture is not implemented yet.',
+        retriable: false,
+      },
+    }
   },
 }
 

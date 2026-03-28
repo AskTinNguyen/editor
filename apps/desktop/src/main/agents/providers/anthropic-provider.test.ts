@@ -80,6 +80,34 @@ describe('AnthropicProvider.runTurn (mocked SDK)', () => {
           result: {},
         }),
       ),
+      vesper_ui_get_state: mock(async () => ({
+        success: true,
+        data: { mode: 'idle', snapshot: null, updatedAt: null },
+      })),
+      vesper_ui_get_selection: mock(async () => ({
+        success: false,
+        error: {
+          code: 'NO_SELECTION',
+          message: 'No UI selection is currently captured.',
+          retriable: true,
+        },
+      })),
+      vesper_ui_get_context: mock(async () => ({
+        success: false,
+        error: {
+          code: 'NO_SELECTION',
+          message: 'No UI selection is currently captured.',
+          retriable: true,
+        },
+      })),
+      vesper_ui_capture_screenshot: mock(async () => ({
+        success: false,
+        error: {
+          code: 'TOOL_UNAVAILABLE',
+          message: 'UI inspector screenshot capture is not implemented yet.',
+          retriable: false,
+        },
+      })),
     }
   }
 

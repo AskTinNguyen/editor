@@ -1,6 +1,11 @@
 import type { SceneCommand } from '@pascal/scene-engine'
 import type { AgentMessage } from '../../shared/agents'
 import type { ProjectId } from '../../shared/projects'
+import type {
+  InspectorResult,
+  UiInspectorContextOptions,
+  UiInspectorState,
+} from '../../shared/ui-inspector'
 
 // ---------------------------------------------------------------------------
 // Tool call handler — host-owned callbacks the provider can invoke
@@ -13,6 +18,27 @@ export type PascalToolCallHandler = {
     projectId: ProjectId
     commands: SceneCommand[]
   }) => Promise<{ status: string; result: unknown }>
+  vesper_ui_get_state: (payload: {
+    projectId: ProjectId
+    windowId?: number
+  }) => Promise<InspectorResult<UiInspectorState>>
+  vesper_ui_get_selection: (payload: {
+    projectId: ProjectId
+    windowId?: number
+  }) => Promise<InspectorResult<NonNullable<UiInspectorState['snapshot']>>>
+  vesper_ui_get_context: (payload: {
+    projectId: ProjectId
+    windowId?: number
+  } & UiInspectorContextOptions) => Promise<InspectorResult<string>>
+  vesper_ui_capture_screenshot: (payload: {
+    projectId: ProjectId
+    windowId?: number
+  }) => Promise<
+    InspectorResult<{
+      screenshotDataUrl: string
+      screenshotByteSize: number
+    }>
+  >
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +102,60 @@ export const PASCAL_TOOL_DEFINITIONS: PascalToolDefinition[] = [
         },
       },
       required: ['projectId', 'commands'],
+    },
+  },
+  {
+    name: 'vesper_ui_get_state',
+    description:
+      'Read the current UI inspector state for the active desktop window. Returns typed read-only inspector data.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'The project ID to read inspector state for' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'vesper_ui_get_selection',
+    description:
+      'Read the current inspected UI selection for the active desktop window. Returns the same selection shown in the inspector panel.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'The project ID to read inspector selection for' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'vesper_ui_get_context',
+    description:
+      'Build the current UI inspector context payload for the active desktop window. Use this for UI and UX reasoning.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'The project ID to read inspector context for' },
+        includeHtml: { type: 'boolean', description: 'Include the trimmed HTML excerpt' },
+        includeStyles: { type: 'boolean', description: 'Include the trimmed style subset' },
+        includeDataAttributes: {
+          type: 'boolean',
+          description: 'Include the trimmed data attribute subset',
+        },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'vesper_ui_capture_screenshot',
+    description:
+      'Return a screenshot for the current inspected UI selection in the active desktop window when screenshot capture is enabled.',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'The project ID to capture inspector screenshot for' },
+      },
+      required: ['projectId'],
     },
   },
 ]

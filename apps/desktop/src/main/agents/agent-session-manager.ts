@@ -90,6 +90,32 @@ export function createAgentSessionManager(deps: {
     }
   }
 
+  function bindToolHandlerToTurn(base: PascalToolCallHandler, windowId?: number): PascalToolCallHandler {
+    return {
+      ...base,
+      vesper_ui_get_state: (payload) =>
+        base.vesper_ui_get_state({
+          ...payload,
+          windowId,
+        }),
+      vesper_ui_get_selection: (payload) =>
+        base.vesper_ui_get_selection({
+          ...payload,
+          windowId,
+        }),
+      vesper_ui_get_context: (payload) =>
+        base.vesper_ui_get_context({
+          ...payload,
+          windowId,
+        }),
+      vesper_ui_capture_screenshot: (payload) =>
+        base.vesper_ui_capture_screenshot({
+          ...payload,
+          windowId,
+        }),
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Bridge path — uses Vesper bridge async generator for streaming turns
   // ---------------------------------------------------------------------------
@@ -101,7 +127,7 @@ export function createAgentSessionManager(deps: {
     project: { scene: unknown },
     session: AgentSession,
     selectionContext?: { selectedNodeIds: string[]; selectedNodeTypes: string[] },
-    options?: { model?: string; thinkingLevel?: ThinkingLevel },
+    options?: { model?: string; thinkingLevel?: ThinkingLevel; windowId?: number },
   ): Promise<AgentTurnResult> {
     let responseText = ''
     const executionLog: ExecutionLogEntry[] = []
@@ -113,6 +139,7 @@ export function createAgentSessionManager(deps: {
       selectionContext,
       model: options?.model,
       thinkingLevel: options?.thinkingLevel,
+      windowId: options?.windowId,
     })) {
       switch (event.type) {
         case 'status':
@@ -189,8 +216,9 @@ export function createAgentSessionManager(deps: {
     project: { scene: unknown },
     session: AgentSession,
     selectionContext?: { selectedNodeIds: string[]; selectedNodeTypes: string[] },
+    windowId?: number,
   ): Promise<AgentTurnResult> {
-    const tracking = createTrackingToolHandler(toolHandler)
+    const tracking = createTrackingToolHandler(bindToolHandlerToTurn(toolHandler, windowId))
 
     const turnOutput = await providerRef.runTurn({
       projectId,
@@ -227,6 +255,7 @@ export function createAgentSessionManager(deps: {
       thinkingLevel?: ThinkingLevel
       agentContextPrefix?: string
       uiInspectorAttachment?: { label: string; source: 'dom' | 'scene'; route?: string }
+      windowId?: number
     },
   ): Promise<AgentTurnResult> {
     // 1. Load session
@@ -272,6 +301,7 @@ export function createAgentSessionManager(deps: {
         turnResult = await sendMessageViaBridge(bridge, projectId, effectivePrompt, project, session, selectionContext, {
           model: options?.model,
           thinkingLevel: options?.thinkingLevel,
+          windowId: options?.windowId,
         })
       } else if (provider) {
         turnResult = await sendMessageViaProvider(
@@ -281,6 +311,7 @@ export function createAgentSessionManager(deps: {
           project,
           session,
           selectionContext,
+          options?.windowId,
         )
       } else {
         throw new Error('Either bridge or provider must be provided')

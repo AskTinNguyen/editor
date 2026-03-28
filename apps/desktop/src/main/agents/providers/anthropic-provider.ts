@@ -56,6 +56,53 @@ const pascalTools = [
       required: ['projectId', 'commands'],
     },
   },
+  {
+    name: 'vesper_ui_get_state',
+    description: 'Read the current UI inspector state for the active desktop window',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        projectId: { type: 'string', description: 'The project ID' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'vesper_ui_get_selection',
+    description: 'Read the current inspected UI selection for the active desktop window',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        projectId: { type: 'string', description: 'The project ID' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'vesper_ui_get_context',
+    description: 'Build the current UI inspector context payload for the active desktop window',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        projectId: { type: 'string', description: 'The project ID' },
+        includeHtml: { type: 'boolean' },
+        includeStyles: { type: 'boolean' },
+        includeDataAttributes: { type: 'boolean' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'vesper_ui_capture_screenshot',
+    description: 'Return a screenshot for the current inspected UI selection in the active desktop window',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        projectId: { type: 'string', description: 'The project ID' },
+      },
+      required: ['projectId'],
+    },
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -159,6 +206,29 @@ export function createAnthropicProvider(
                 result = await toolHandler.scene_applyCommands({
                   projectId: input.projectId as any,
                   commands: input.commands as any,
+                })
+                break
+              case 'vesper_ui_get_state':
+                result = await toolHandler.vesper_ui_get_state({
+                  projectId: input.projectId as any,
+                })
+                break
+              case 'vesper_ui_get_selection':
+                result = await toolHandler.vesper_ui_get_selection({
+                  projectId: input.projectId as any,
+                })
+                break
+              case 'vesper_ui_get_context':
+                result = await toolHandler.vesper_ui_get_context({
+                  projectId: input.projectId as any,
+                  includeHtml: input.includeHtml === true,
+                  includeStyles: input.includeStyles === true,
+                  includeDataAttributes: input.includeDataAttributes === true,
+                })
+                break
+              case 'vesper_ui_capture_screenshot':
+                result = await toolHandler.vesper_ui_capture_screenshot({
+                  projectId: input.projectId as any,
                 })
                 break
               default:

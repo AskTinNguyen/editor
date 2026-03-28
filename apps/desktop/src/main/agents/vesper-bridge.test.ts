@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { AVAILABLE_MODELS, THINKING_LEVELS, getThinkingBudgetTokens } from '../../shared/agents'
 import type { PascalToolCallHandler } from './agent-provider'
 import { createVesperBridge } from './vesper-bridge'
@@ -12,6 +12,31 @@ function makeMockToolHandler(): PascalToolCallHandler {
     project_read: async () => ({ name: 'test', scene: {} }),
     scene_read: async () => ({}),
     scene_applyCommands: async () => ({ status: 'ok', result: {} }),
+    vesper_ui_get_state: async () => ({
+      success: true,
+      data: { mode: 'inspect', snapshot: null, updatedAt: '2026-03-28T00:00:00.000Z' },
+    }),
+    vesper_ui_get_selection: async () => ({
+      success: true,
+      data: {
+        source: 'dom',
+        label: 'Inspect button',
+        selector: '#inspect',
+        bounds: { x: 1, y: 2, width: 3, height: 4 },
+      },
+    }),
+    vesper_ui_get_context: async () => ({
+      success: true,
+      data: 'UI_INSPECTOR_CONTEXT\nlabel: Inspect button',
+    }),
+    vesper_ui_capture_screenshot: async () => ({
+      success: false,
+      error: {
+        code: 'TOOL_UNAVAILABLE',
+        message: 'UI inspector screenshot capture is not implemented yet.',
+        retriable: false,
+      },
+    }),
   }
 }
 
@@ -81,6 +106,75 @@ describe('VesperBridge', () => {
       thinkingLevel: 'off',
     })
     expect(typeof gen.next).toBe('function')
+  })
+
+  test('routes vesper_ui_get_selection with the current windowId', async () => {
+    const selectionCalls: Array<{ projectId: string; windowId?: number }> = []
+    const toolHandler = makeMockToolHandler()
+    toolHandler.vesper_ui_get_selection = async (payload) => {
+      selectionCalls.push(payload)
+      return {
+        success: true as const,
+        data: {
+          source: 'dom',
+          label: 'Inspect button',
+          selector: '#inspect',
+          bounds: { x: 1, y: 2, width: 3, height: 4 },
+        },
+      }
+    }
+
+    const mockCreate = mock(async () => {
+      if (selectionCalls.length === 0) {
+        return {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool_1',
+              name: 'vesper_ui_get_selection',
+              input: { projectId: 'project_test123' },
+            },
+          ],
+          stop_reason: 'tool_use',
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }
+      }
+
+      return {
+        content: [{ type: 'text', text: 'Selection loaded.' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }
+    })
+
+    mock.module('@anthropic-ai/sdk', () => {
+      class Anthropic {
+        messages = {
+          create: mockCreate,
+        }
+      }
+
+      return { default: Anthropic }
+    })
+
+    const bridge = createVesperBridge({ apiKey: 'test-key' }, toolHandler)
+    const events: Array<{ type: string; [key: string]: unknown }> = []
+
+    for await (const event of bridge.chat('Inspect this', {
+      projectId: 'project_test123',
+      sceneContext: { nodes: {}, rootNodeIds: [] },
+      windowId: 99,
+    })) {
+      events.push(event)
+    }
+
+    expect(selectionCalls).toEqual([{ projectId: 'project_test123', windowId: 99 }])
+    expect(
+      events.some((event) => event.type === 'tool_start' && event.toolName === 'vesper_ui_get_selection'),
+    ).toBe(true)
+    expect(
+      events.some((event) => event.type === 'text_complete' && event.text === 'Selection loaded.'),
+    ).toBe(true)
   })
 })
 

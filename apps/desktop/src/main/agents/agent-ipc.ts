@@ -1,4 +1,4 @@
-import { ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import {
   AGENT_IPC_CHANNELS,
   PROVIDER_CONFIG_IPC_CHANNELS,
@@ -85,7 +85,7 @@ export function registerAgentIpc(
   ipcMain.handle(
     AGENT_IPC_CHANNELS.sendMessage,
     (
-      _event,
+      event,
       {
         projectId,
         prompt,
@@ -102,7 +102,10 @@ export function registerAgentIpc(
         }
       },
     ) =>
-      manager.sendMessage(projectId, prompt, options),
+      manager.sendMessage(projectId, prompt, {
+        ...options,
+        windowId: BrowserWindow.fromWebContents(event.sender)?.id ?? event.sender.id,
+      }),
   )
 
   // Fire-and-forget subscription handlers (on/send)

@@ -69,6 +69,65 @@ const pascalTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'vesper_ui_get_state',
+      description: 'Read the current UI inspector state for the active desktop window',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'The project ID' },
+        },
+        required: ['projectId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vesper_ui_get_selection',
+      description: 'Read the current inspected UI selection for the active desktop window',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'The project ID' },
+        },
+        required: ['projectId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vesper_ui_get_context',
+      description: 'Build the current UI inspector context payload for the active desktop window',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'The project ID' },
+          includeHtml: { type: 'boolean' },
+          includeStyles: { type: 'boolean' },
+          includeDataAttributes: { type: 'boolean' },
+        },
+        required: ['projectId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vesper_ui_capture_screenshot',
+      description: 'Return a screenshot for the current inspected UI selection in the active desktop window',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'The project ID' },
+        },
+        required: ['projectId'],
+      },
+    },
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -155,6 +214,29 @@ export function createOpenAIProvider(
                 result = await toolHandler.scene_applyCommands({
                   projectId: args.projectId,
                   commands: args.commands,
+                })
+                break
+              case 'vesper_ui_get_state':
+                result = await toolHandler.vesper_ui_get_state({
+                  projectId: args.projectId,
+                })
+                break
+              case 'vesper_ui_get_selection':
+                result = await toolHandler.vesper_ui_get_selection({
+                  projectId: args.projectId,
+                })
+                break
+              case 'vesper_ui_get_context':
+                result = await toolHandler.vesper_ui_get_context({
+                  projectId: args.projectId,
+                  includeHtml: args.includeHtml === true,
+                  includeStyles: args.includeStyles === true,
+                  includeDataAttributes: args.includeDataAttributes === true,
+                })
+                break
+              case 'vesper_ui_capture_screenshot':
+                result = await toolHandler.vesper_ui_capture_screenshot({
+                  projectId: args.projectId,
                 })
                 break
               default:
