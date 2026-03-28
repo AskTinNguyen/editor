@@ -117,15 +117,56 @@ export function registerUiInspectorIpc(service: UiInspectorService) {
 
   ipcMain.handle(
     UI_INSPECTOR_IPC_CHANNELS.captureScreenshot,
-    (
-      _event,
-      _payload: {
+    async (
+      event,
+      payload: {
         projectId: ProjectId
-        bounds: UiInspectorBounds
+        bounds?: UiInspectorBounds
         scale?: number
         captureContext?: string
       },
-    ) => permissionBlockedResult('Inspector screenshot capture is not implemented yet.'),
+    ) => {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender)
+        if (!win) {
+          return {
+            success: false,
+            error: { code: 'NO_WINDOW', message: 'No window found', retriable: false },
+          } satisfies InspectorResult<never>
+        }
+
+        const image = await win.webContents.capturePage(
+          payload.bounds
+            ? {
+                x: Math.round(payload.bounds.x),
+                y: Math.round(payload.bounds.y),
+                width: Math.round(payload.bounds.width),
+                height: Math.round(payload.bounds.height),
+              }
+            : undefined,
+        )
+
+        const pngBuffer = image.toPNG()
+        const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`
+
+        return {
+          success: true,
+          data: {
+            screenshotDataUrl: dataUrl,
+            screenshotByteSize: pngBuffer.length,
+          },
+        } satisfies InspectorResult<{ screenshotDataUrl: string; screenshotByteSize: number }>
+      } catch (err) {
+        return {
+          success: false,
+          error: {
+            code: 'CAPTURE_FAILED',
+            message: err instanceof Error ? err.message : String(err),
+            retriable: true,
+          },
+        } satisfies InspectorResult<never>
+      }
+    },
   )
 
   ipcMain.handle(

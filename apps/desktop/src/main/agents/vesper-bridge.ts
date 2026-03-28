@@ -245,13 +245,13 @@ export function createVesperBridge(
         {
           name: 'vesper_ui_capture_screenshot' as const,
           description:
-            'Return a screenshot for the current inspected UI selection in the active desktop window.',
+            'Capture a screenshot of the current editor view. Returns a base64 PNG image so you can SEE what the scene looks like. Use this to verify your changes visually.',
           input_schema: {
             type: 'object' as const,
             properties: {
               projectId: {
                 type: 'string',
-                description: 'The project ID to capture inspector screenshot for',
+                description: 'The project ID',
               },
             },
             required: ['projectId'],

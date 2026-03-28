@@ -360,4 +360,92 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('XZ plane')
     expect(prompt).toContain('Y is up')
   })
+
+  // -----------------------------------------------------------------------
+  // New tests — asset catalog
+  // -----------------------------------------------------------------------
+
+  test('includes asset catalog section', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('Available Assets')
+    expect(prompt).toContain('Asset categories:')
+    expect(prompt).toContain('furniture')
+    expect(prompt).toContain('kitchen')
+    expect(prompt).toContain('bathroom')
+    expect(prompt).toContain('appliance')
+    expect(prompt).toContain('outdoor')
+  })
+
+  test('lists at least 20 asset IDs in the catalog', () => {
+    const prompt = buildSystemPrompt(null)
+    const assetIds = [
+      'sofa', 'dining-table', 'dining-chair', 'office-chair', 'office-table',
+      'single-bed', 'double-bed', 'bookshelf', 'closet', 'coffee-table',
+      'tv-stand', 'floor-lamp', 'ceiling-lamp', 'fridge', 'stove',
+      'toilet', 'bathtub', 'bathroom-sink', 'television', 'tree',
+      'bush', 'palm', 'washing-machine', 'shower-square',
+    ]
+    let count = 0
+    for (const id of assetIds) {
+      if (prompt.includes(`- ${id}:`)) {
+        count++
+      }
+    }
+    expect(count).toBeGreaterThanOrEqual(20)
+  })
+
+  test('includes asset dimensions in catalog', () => {
+    const prompt = buildSystemPrompt(null)
+    // Check a few exact dimensions from the catalog
+    expect(prompt).toContain('2.2x0.9x1.0m')  // sofa
+    expect(prompt).toContain('0.7x1.8x0.7m')  // fridge
+    expect(prompt).toContain('0.4x0.4x0.7m')  // toilet
+  })
+
+  test('includes attachTo annotations for wall/ceiling items', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('ceiling-lamp: 0.5x0.3x0.5m (attachTo: ceiling)')
+    expect(prompt).toContain('kitchen-cabinet: 0.6x0.7x0.4m (attachTo: wall)')
+    expect(prompt).toContain('television: 1.0x0.6x0.1m (attachTo: wall)')
+    expect(prompt).toContain('ceiling-fan: 1.0x0.3x1.0m (attachTo: ceiling)')
+  })
+
+  test('includes item creation example with asset fields', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('To create an item:')
+    expect(prompt).toContain('category: "furniture"')
+    expect(prompt).toContain('thumbnail: "/items/sofa/thumbnail.webp"')
+    expect(prompt).toContain('src: "/items/sofa/model.glb"')
+    expect(prompt).toContain('dimensions: [2.2, 0.9, 1.0]')
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — wall connectivity guidance
+  // -----------------------------------------------------------------------
+
+  test('includes wall connectivity guidance', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('walls should share endpoints')
+    expect(prompt).toContain('wall_north goes from (0,4) to (5,4)')
+    expect(prompt).toContain('wall_east should start at (5,4)')
+    expect(prompt).toContain('Always list walls in order')
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — UI inspector tools
+  // -----------------------------------------------------------------------
+
+  test('includes UI inspector tools section', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('## UI Inspector Tools')
+    expect(prompt).toContain('vesper_ui_capture_screenshot')
+    expect(prompt).toContain('vesper_ui_get_state')
+    expect(prompt).toContain('vesper_ui_get_selection')
+  })
+
+  test('describes screenshot tool purpose', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('Capture a screenshot')
+    expect(prompt).toContain('SEE what the scene looks like')
+  })
 })

@@ -155,7 +155,69 @@ Example: { object: "node", id: "guide_001", type: "guide", parentId: "level_001"
 ### scan (parent: level)
 Required: url: string (model URL)
 Optional: position: [x,y,z], rotation: [x,y,z], scale: [x,y,z], opacity (0-100)
-Example: { object: "node", id: "scan_001", type: "scan", parentId: "level_001", visible: true, metadata: {}, children: [], url: "https://example.com/scan.glb" }`
+Example: { object: "node", id: "scan_001", type: "scan", parentId: "level_001", visible: true, metadata: {}, children: [], url: "https://example.com/scan.glb" }
+
+## Available Assets (for item nodes)
+
+Asset categories: furniture (44), appliance (20), outdoor (17), kitchen (13), bathroom (10), window (3), door (3)
+
+When creating an item node, use one of these assets. The asset fields (id, category, name, thumbnail, src, dimensions) must match exactly.
+Thumbnail pattern: /items/{id}/thumbnail.webp — Source pattern: /items/{id}/model.glb
+
+### furniture
+- sofa: 2.2x0.9x1.0m — living room sofa
+- dining-table: 1.6x0.8x1.0m — dining table
+- dining-chair: 0.5x0.9x0.5m — dining chair
+- office-chair: 0.6x1.2x0.6m — office chair
+- office-table: 1.4x0.8x0.7m — office desk
+- livingroom-chair: 1.0x0.9x0.8m — living room armchair
+- single-bed: 1.0x0.5x2.0m — single bed
+- double-bed: 1.6x0.5x2.1m — double bed
+- bunkbed: 1.0x1.8x2.1m — bunk bed
+- bookshelf: 0.8x1.8x0.4m — bookshelf
+- closet: 1.2x2.0x0.6m — wardrobe closet
+- dresser: 0.8x0.8x0.5m — dresser
+- coffee-table: 0.8x0.4x0.8m — coffee table
+- bedside-table: 0.5x0.5x0.4m — bedside table
+- tv-stand: 1.2x0.5x0.4m — TV stand
+- floor-lamp: 0.3x1.5x0.3m — floor lamp
+- ceiling-lamp: 0.5x0.3x0.5m (attachTo: ceiling) — ceiling light
+- table-lamp: 0.2x0.4x0.2m — table lamp
+- round-carpet: 2.0x0.01x2.0m — round area rug
+- rectangular-carpet: 2.5x0.01x1.5m — rectangular rug
+- stool: 0.4x0.75x0.4m — stool
+- lounge-chair: 0.8x0.8x0.9m — lounge chair
+- piano: 1.5x1.0x0.6m — piano
+- coat-rack: 0.5x1.7x0.5m — coat rack
+
+### kitchen
+- fridge: 0.7x1.8x0.7m — refrigerator
+- stove: 0.6x0.9x0.6m — cooking stove
+- kitchen-counter: 1.0x0.9x0.6m — counter surface
+- kitchen-cabinet: 0.6x0.7x0.4m (attachTo: wall) — wall cabinet
+- microwave: 0.5x0.3x0.4m — microwave oven
+- hood: 0.6x0.4x0.5m (attachTo: wall) — range hood
+
+### bathroom
+- toilet: 0.4x0.4x0.7m — toilet
+- bathtub: 0.8x0.6x1.7m — bathtub
+- bathroom-sink: 0.6x0.5x0.5m — bathroom sink
+- shower-square: 0.9x2.0x0.9m — square shower
+- washing-machine: 0.6x0.9x0.6m — washing machine
+
+### appliance
+- television: 1.0x0.6x0.1m (attachTo: wall) — wall TV
+- air-conditioning: 0.8x0.3x0.2m (attachTo: wall) — AC unit
+- ceiling-fan: 1.0x0.3x1.0m (attachTo: ceiling) — ceiling fan
+- computer: 0.4x0.4x0.1m — desktop computer
+
+### outdoor
+- tree: 2.0x4.0x2.0m — deciduous tree
+- bush: 1.0x0.8x1.0m — garden bush
+- palm: 1.0x3.0x1.0m — palm tree
+- fir-tree: 1.5x3.0x1.5m — fir tree
+
+To create an item: { object: "node", id: "item_sofa1", type: "item", parentId: "level_xxx", visible: true, metadata: {}, children: [], position: [x, y, z], rotation: [0, 0, 0], scale: [1, 1, 1], asset: { id: "sofa", category: "furniture", name: "Sofa", thumbnail: "/items/sofa/thumbnail.webp", src: "/items/sofa/model.glb", dimensions: [2.2, 0.9, 1.0] } }`
 
 // ---------------------------------------------------------------------------
 // All 14 node type names (for validation)
@@ -256,6 +318,11 @@ ${selectionSection}
 - scene_read(projectId): Read only the scene graph. Returns { nodes: Record<id, Node>, rootNodeIds: string[] }. Use this to get precise coordinates before making changes.
 - scene_applyCommands(projectId, commands): Apply mutations atomically. Commands is an array and they execute in order.
 
+## UI Inspector Tools
+- vesper_ui_capture_screenshot(projectId): Capture a screenshot of the current editor view. Returns a base64 image. Use this to SEE what the scene looks like.
+- vesper_ui_get_state(projectId): Read the current UI inspector state (mode, selected element).
+- vesper_ui_get_selection(projectId): Read the currently inspected UI element details.
+
 ## Scene Commands
 Each command in the commands array must be one of:
 
@@ -283,5 +350,7 @@ ${NODE_SCHEMA_REFERENCE}
 5. When creating doors/windows on a wall, set BOTH parentId AND wallId to the wall's ID
 6. For rooms: create 4 walls, a slab, a ceiling, and a zone
 7. Coordinates are in meters, XZ plane (Y is up)
-8. Call scene_read first if you need precise coordinates of existing nodes that are not shown in the scene dump above`
+8. Call scene_read first if you need precise coordinates of existing nodes that are not shown in the scene dump above
+9. When creating connected walls (e.g., a room), walls should share endpoints. For example, if wall_north goes from (0,4) to (5,4), then wall_east should start at (5,4) and go to (5,0).
+10. Always list walls in order (e.g., south, east, north, west) so endpoints connect.`
 }
