@@ -2,6 +2,7 @@ import { emitter, type GridEvent, type LevelNode, useScene, type WallNode } from
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 import { DoubleSide, type Group, type Mesh, Shape, ShapeGeometry, Vector3 } from 'three'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -166,6 +167,7 @@ export const WallTool: React.FC = () => {
 
     const onCancel = () => {
       if (buildingState.current === 1) {
+        markToolCancelConsumed()
         buildingState.current = 0
         wallPreviewRef.current.visible = false
       }
