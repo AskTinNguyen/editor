@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildSystemPrompt } from './system-prompt'
+import { ALL_NODE_TYPES, buildSystemPrompt } from './system-prompt'
 
 // ---------------------------------------------------------------------------
 // Test scene fixtures
@@ -39,6 +39,7 @@ const sampleScene = makeScene(
       type: 'zone',
       id: 'zone_001',
       parentId: 'level_001',
+      name: 'Living Room',
       polygon: { type: 'polygon', points: [[0, 0], [5, 0], [5, 4], [0, 4]] },
     },
     item_001: {
@@ -99,7 +100,7 @@ describe('buildSystemPrompt', () => {
   test('includes the important rules section', () => {
     const prompt = buildSystemPrompt(sampleScene)
     expect(prompt).toContain('Important Rules')
-    expect(prompt).toContain('Node IDs must use the correct prefix')
+    expect(prompt).toContain('Node IDs must use the format')
     expect(prompt).toContain('object: "node"')
     expect(prompt).toContain('Commands are validated atomically')
     expect(prompt).toContain('scene_read first')
@@ -136,7 +137,7 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('0 nodes')
     expect(prompt).not.toThrow
     // Should still include the schema examples and rules
-    expect(prompt).toContain('Wall')
+    expect(prompt).toContain('wall (parent: level)')
     expect(prompt).toContain('Important Rules')
     expect(prompt).toContain('Level nodes: (none)')
   })
@@ -186,5 +187,177 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(multiLevelScene)
     expect(prompt).toContain('level_001')
     expect(prompt).toContain('level_002')
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — all 14 node types documented
+  // -----------------------------------------------------------------------
+
+  test('documents all 14 node types in the schema reference', () => {
+    const prompt = buildSystemPrompt(null)
+    for (const nodeType of ALL_NODE_TYPES) {
+      expect(prompt).toContain(`### ${nodeType}`)
+    }
+  })
+
+  test('ALL_NODE_TYPES contains exactly 14 types', () => {
+    expect(ALL_NODE_TYPES.length).toBe(14)
+  })
+
+  test('includes door example with wallId', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('type: "door"')
+    expect(prompt).toContain('wallId: "wall_001"')
+  })
+
+  test('includes window example with wallId', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('type: "window"')
+    expect(prompt).toContain('wallId: "wall_001"')
+  })
+
+  test('includes roof-segment schema', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('roof-segment')
+    expect(prompt).toContain('roofType')
+    expect(prompt).toContain('"gable"')
+  })
+
+  test('includes guide and scan schemas', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('### guide')
+    expect(prompt).toContain('### scan')
+    expect(prompt).toContain('url: string')
+  })
+
+  test('includes ceiling schema', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('### ceiling')
+    expect(prompt).toContain('height: 2.5')
+  })
+
+  test('includes slab schema', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('### slab')
+    expect(prompt).toContain('elevation')
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — compact scene dump
+  // -----------------------------------------------------------------------
+
+  test('includes compact scene dump when scene has nodes', () => {
+    const prompt = buildSystemPrompt(sampleScene)
+    // Should contain a JSON code block with the compact dump
+    expect(prompt).toContain('```json')
+    expect(prompt).toContain('"type": "wall"')
+    expect(prompt).toContain('"type": "zone"')
+  })
+
+  test('compact scene dump includes key fields per type', () => {
+    const sceneWithDetails = makeScene({
+      level_001: { type: 'level', id: 'level_001', parentId: 'building_001', level: 0 },
+      wall_001: {
+        type: 'wall',
+        id: 'wall_001',
+        parentId: 'level_001',
+        start: [0, 0],
+        end: [5, 0],
+        thickness: 0.15,
+      },
+      door_001: {
+        type: 'door',
+        id: 'door_001',
+        parentId: 'wall_001',
+        wallId: 'wall_001',
+        width: 0.9,
+        height: 2.1,
+      },
+      zone_001: {
+        type: 'zone',
+        id: 'zone_001',
+        parentId: 'level_001',
+        name: 'Kitchen',
+        polygon: [[0, 0], [3, 0], [3, 3], [0, 3]],
+      },
+    })
+    const prompt = buildSystemPrompt(sceneWithDetails)
+    // Wall fields
+    expect(prompt).toContain('"start"')
+    expect(prompt).toContain('"end"')
+    // Door fields
+    expect(prompt).toContain('"wallId": "wall_001"')
+    expect(prompt).toContain('"width": 0.9')
+    // Zone fields
+    expect(prompt).toContain('"name": "Kitchen"')
+  })
+
+  test('does not include scene dump for empty scene', () => {
+    const prompt = buildSystemPrompt(makeScene({}, []))
+    // Should not have a JSON code block for the dump
+    expect(prompt).not.toContain('```json\n[')
+  })
+
+  test('caps scene dump at 50 nodes', () => {
+    // Create a scene with 60 nodes
+    const nodes: Record<string, { type: string; id: string; parentId: string }> = {}
+    for (let i = 0; i < 60; i++) {
+      const id = `wall_${String(i).padStart(3, '0')}`
+      nodes[id] = { type: 'wall', id, parentId: 'level_001' }
+    }
+    const largeScene = makeScene(nodes, ['site_001'])
+    const prompt = buildSystemPrompt(largeScene)
+
+    // Should mention truncation
+    expect(prompt).toContain('first 50 of 60 nodes')
+
+    // Count how many wall entries appear in the JSON dump
+    const dumpMatch = prompt.match(/```json\n([\s\S]*?)\n```/)
+    expect(dumpMatch).not.toBeNull()
+    const dumpArray = JSON.parse(dumpMatch![1]) as unknown[]
+    expect(dumpArray.length).toBe(50)
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — door/window wallId rule
+  // -----------------------------------------------------------------------
+
+  test('rules mention setting BOTH parentId AND wallId for doors/windows', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('set BOTH parentId AND wallId')
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — room creation guidance
+  // -----------------------------------------------------------------------
+
+  test('rules include guidance for creating rooms', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('4 walls, a slab, a ceiling, and a zone')
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — command details
+  // -----------------------------------------------------------------------
+
+  test('explains that commands execute in order', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('Commands is an array and they execute in order')
+  })
+
+  test('explains parentId in command vs node', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('parentId in the command is what matters')
+  })
+
+  // -----------------------------------------------------------------------
+  // New tests — coordinates
+  // -----------------------------------------------------------------------
+
+  test('mentions coordinates are in meters on XZ plane', () => {
+    const prompt = buildSystemPrompt(null)
+    expect(prompt).toContain('meters')
+    expect(prompt).toContain('XZ plane')
+    expect(prompt).toContain('Y is up')
   })
 })

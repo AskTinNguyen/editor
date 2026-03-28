@@ -103,35 +103,93 @@ export function createVesperBridge(
         options.projectId,
       )
 
-      // Pascal scene tools in Anthropic format
+      // Pascal scene tools in Anthropic format — with rich schemas
       const tools = [
         {
           name: 'project_read' as const,
-          description: 'Read project metadata and scene graph',
+          description:
+            'Read the project name and complete scene graph. Returns { name: string, scene: { nodes, rootNodeIds } }.',
           input_schema: {
             type: 'object' as const,
-            properties: { projectId: { type: 'string' } },
+            properties: {
+              projectId: {
+                type: 'string',
+                description: 'The project ID to read',
+              },
+            },
             required: ['projectId'],
           },
         },
         {
           name: 'scene_read' as const,
-          description: 'Read the scene graph for a project',
+          description:
+            'Read only the scene graph. Returns { nodes: Record<id, Node>, rootNodeIds: string[] }. Use this to get precise coordinates before making changes.',
           input_schema: {
             type: 'object' as const,
-            properties: { projectId: { type: 'string' } },
+            properties: {
+              projectId: {
+                type: 'string',
+                description: 'The project ID to read',
+              },
+            },
             required: ['projectId'],
           },
         },
         {
           name: 'scene_applyCommands' as const,
           description:
-            'Apply scene commands atomically. Supports create-node, update-node, move-node, delete-node.',
+            'Apply scene commands to create, modify, move, or delete nodes. Commands execute in order and are validated atomically — if any fails, all roll back.',
           input_schema: {
             type: 'object' as const,
             properties: {
-              projectId: { type: 'string' },
-              commands: { type: 'array', items: { type: 'object' } },
+              projectId: {
+                type: 'string',
+                description: 'The project ID to modify',
+              },
+              commands: {
+                type: 'array',
+                description: 'Array of scene commands to execute in order',
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: {
+                      type: 'string',
+                      enum: [
+                        'create-node',
+                        'update-node',
+                        'move-node',
+                        'delete-node',
+                      ],
+                      description: 'Command type',
+                    },
+                    parentId: {
+                      type: 'string',
+                      description:
+                        'Parent node ID — determines where the node is placed in the hierarchy (for create-node)',
+                    },
+                    node: {
+                      type: 'object',
+                      description:
+                        'Full node object with all required fields (for create-node)',
+                    },
+                    nodeId: {
+                      type: 'string',
+                      description:
+                        'Target node ID (for update-node, move-node, delete-node)',
+                    },
+                    patch: {
+                      type: 'object',
+                      description:
+                        'Fields to update — cannot change id, type, parentId, children, or object (for update-node)',
+                    },
+                    newParentId: {
+                      type: 'string',
+                      description: 'New parent node ID (for move-node)',
+                    },
+                  },
+                  required: ['type'],
+                },
+              },
             },
             required: ['projectId', 'commands'],
           },
